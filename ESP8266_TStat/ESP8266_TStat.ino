@@ -17,6 +17,8 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
+#include "Secrets.h"
+
 // Data wire is connected to GPIO 4
 #define ONE_WIRE_BUS 4
 
@@ -26,9 +28,7 @@ OneWire oneWire(ONE_WIRE_BUS);
 // Pass our oneWire reference to Dallas Temperature sensor
 DallasTemperature sensors(&oneWire);
 
-// Replace with your network credentials
-const char* ssid = "REPLACE_WITH_YOUR_SSID";
-const char* password = "REPLACE_WITH_YOUR_PASSWORD";
+
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -138,7 +138,7 @@ String processor(const String& var){
 
 void setup(){
   // Serial port for debugging purposes
-  Serial.begin(115200);
+  Serial.begin(76800);
   Serial.println();
 
   // Start up the DS18B20 library
