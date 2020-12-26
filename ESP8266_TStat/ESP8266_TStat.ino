@@ -19,8 +19,21 @@
 
 #include "Secrets.h"
 
-// Data wire is connected to GPIO 4
-#define ONE_WIRE_BUS 4
+// Pinouts configuration
+	// Data wire is connected to GPIO 4
+	#define ONE_WIRE_BUS	4		// D2
+
+	// Button is on D1
+	#define BUTTON		 	5		// D1
+
+	// RGB Led indicator (common anode)
+	#define LED_R			13		// D7
+	#define LED_G			12		// D6
+	#define LED_B			14		// D5
+
+	// Load switch control output
+	#define LOAD			15		// D8
+
 
 // Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(ONE_WIRE_BUS);
@@ -137,9 +150,33 @@ String processor(const String& var){
 }
 
 void setup(){
+
   // Serial port for debugging purposes
   Serial.begin(76800);
-  Serial.println();
+  Serial.println("Serial output started.");
+
+
+  // Setup pins *************************************
+  Serial.println("Pins configuration.");
+  pinMode(BUTTON,	INPUT_PULLUP);//INPUT_PULLUP);
+
+  pinMode(LED_R,	OUTPUT_OPEN_DRAIN);//OUTPUT_OPEN_DRAIN);
+  pinMode(LED_G,	OUTPUT_OPEN_DRAIN);//OUTPUT_OPEN_DRAIN);
+  pinMode(LED_B,	OUTPUT_OPEN_DRAIN);//OUTPUT_OPEN_DRAIN);
+
+
+  digitalWrite(LED_R, HIGH);
+  digitalWrite(LED_G, HIGH);
+  digitalWrite(LED_B, HIGH);
+
+
+  pinMode(LOAD,		OUTPUT);
+
+  // initialize digital pin LED_BUILTIN as an output.
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  Serial.println("Pins configured.");
+
 
   // Start up the DS18B20 library
   sensors.begin();
@@ -171,5 +208,10 @@ void setup(){
 }
 
 void loop(){
+
+	digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
+	digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
+
+	yield();
 
 }
