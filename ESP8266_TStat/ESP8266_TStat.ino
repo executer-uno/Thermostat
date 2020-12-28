@@ -27,9 +27,9 @@
 	#define BUTTON		 	5		// D1
 
 	// RGB Led indicator (common anode)
-	#define LED_R			13		// D7
-	#define LED_G			12		// D6
-	#define LED_B			14		// D5
+	#define LED_G			13		// D7 // Freen
+	#define LED_B			12		// D6 // Blue
+	#define LED_R			14		// D5 // Red
 
 	// Load switch control output
 	#define LOAD			15		// D8
@@ -41,7 +41,10 @@ OneWire oneWire(ONE_WIRE_BUS);
 // Pass our oneWire reference to Dallas Temperature sensor
 DallasTemperature sensors(&oneWire);
 
-
+// Number of temperature devices found
+int numberOfDevices;
+// We'll use this variable to store a found device address
+DeviceAddress tempDeviceAddress;
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -149,6 +152,14 @@ String processor(const String& var){
   return String();
 }
 
+// function to print a device address
+void printAddress(DeviceAddress deviceAddress) {
+  for (uint8_t i = 0; i < 8; i++){
+    if (deviceAddress[i] < 16) Serial.print("0");
+      Serial.print(deviceAddress[i], HEX);
+  }
+}
+
 void setup(){
 
   // Serial port for debugging purposes
@@ -180,6 +191,29 @@ void setup(){
 
   // Start up the DS18B20 library
   sensors.begin();
+  // Grab a count of devices on the wire
+  numberOfDevices = sensors.getDeviceCount();
+  // locate devices on the bus
+  Serial.print("Locating devices...");
+  Serial.print("Found ");
+  Serial.print(numberOfDevices, DEC);
+  Serial.println(" devices.");
+  // Loop through each device, print out address
+  for(int i=0;i<numberOfDevices; i++){
+    // Search the wire for address
+    if(sensors.getAddress(tempDeviceAddress, i)){
+      Serial.print("Found device ");
+      Serial.print(i, DEC);
+      Serial.print(" with address: ");
+      printAddress(tempDeviceAddress);
+      Serial.println();
+    } else {
+      Serial.print("Found ghost device at ");
+      Serial.print(i, DEC);
+      Serial.print(" but could not detect address. Check power and cabling");
+    }
+  }
+
 
   // Connect to Wi-Fi
   WiFi.begin(ssid, password);
@@ -209,9 +243,32 @@ void setup(){
 
 void loop(){
 
-	digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
-	digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
+	digitalWrite(LED_G, LOW);										// LED ON
+	sensors.requestTemperatures(); // Send the command to get temperatures
+	digitalWrite(LED_G, HIGH);										// LED OFF
 
+  	digitalWrite(LED_BUILTIN, LOW);
+
+	// Loop through each device, print out temperature data
+	for(int i=0;i<numberOfDevices; i++){
+		// Search the wire for address
+		if(sensors.getAddress(tempDeviceAddress, i)){
+		  // Output the device ID
+		  Serial.print("Temperature for device: ");
+		  Serial.println(i,DEC);
+		  // Print the data
+		  float tempC = sensors.getTempC(tempDeviceAddress);
+
+		  Serial.print("Temp C: ");
+		  Serial.print(tempC);
+		  Serial.println("°C");
+
+		}
+	}
+	digitalWrite(LED_BUILTIN, HIGH);
+
+
+	delay(5000);
 	yield();
 
 }
