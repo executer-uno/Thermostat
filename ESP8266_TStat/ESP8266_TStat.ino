@@ -49,35 +49,28 @@ DeviceAddress tempDeviceAddress;
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
 
+// Main sensor temperature
+float tempMain = -127.00;
+
 String readDSTemperatureC() {
-  // Call sensors.requestTemperatures() to issue a global temperature and Requests to all devices on the bus
-  sensors.requestTemperatures();
-  float tempC = sensors.getTempCByIndex(0);
+	/*								// - sensor call crushes runtime
+	// Call sensors.requestTemperatures() to issue a global temperature and Requests to all devices on the bus
+	sensors.requestTemperatures();
 
-  if(tempC == -127.00) {
-    Serial.println("Failed to read from DS18B20 sensor");
-    return "--";
-  } else {
-    Serial.print("Temperature Celsius: ");
-    Serial.println(tempC);
-  }
-  return String(tempC);
+	float tempC = sensors.getTempCByIndex(0);
+	*/
+	float tempC = tempMain;
+
+	if(tempC == -127.00) {
+	Serial.println("Failed to read from DS18B20 sensor");
+	return "--";
+	} else {
+	Serial.print("Temperature Celsius: ");
+	Serial.println(tempC);
+	}
+	return String(tempC);
 }
 
-String readDSTemperatureF() {
-  // Call sensors.requestTemperatures() to issue a global temperature and Requests to all devices on the bus
-  sensors.requestTemperatures();
-  float tempF = sensors.getTempFByIndex(0);
-
-  if(int(tempF) == -196){
-    Serial.println("Failed to read from DS18B20 sensor");
-    return "--";
-  } else {
-    Serial.print("Temperature Fahrenheit: ");
-    Serial.println(tempF);
-  }
-  return String(tempF);
-}
 
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html>
@@ -109,14 +102,10 @@ const char index_html[] PROGMEM = R"rawliteral(
     <span id="temperaturec">%TEMPERATUREC%</span>
     <sup class="units">&deg;C</sup>
   </p>
-  <p>
-    <i class="fas fa-thermometer-half" style="color:#059e8a;"></i> 
-    <span class="ds-labels">Temperature Fahrenheit</span>
-    <span id="temperaturef">%TEMPERATUREF%</span>
-    <sup class="units">&deg;F</sup>
-  </p>
 </body>
+
 <script>
+
 setInterval(function ( ) {
   var xhttp = new XMLHttpRequest();
   xhttp.onreadystatechange = function() {
@@ -127,17 +116,9 @@ setInterval(function ( ) {
   xhttp.open("GET", "/temperaturec", true);
   xhttp.send();
 }, 10000) ;
-setInterval(function ( ) {
-  var xhttp = new XMLHttpRequest();
-  xhttp.onreadystatechange = function() {
-    if (this.readyState == 4 && this.status == 200) {
-      document.getElementById("temperaturef").innerHTML = this.responseText;
-    }
-  };
-  xhttp.open("GET", "/temperaturef", true);
-  xhttp.send();
-}, 10000) ;
+
 </script>
+
 </html>)rawliteral";
 
 // Replaces placeholder with DHT values
@@ -146,10 +127,11 @@ String processor(const String& var){
   if(var == "TEMPERATUREC"){
     return readDSTemperatureC();
   }
-  else if(var == "TEMPERATUREF"){
-    return readDSTemperatureF();
-  }
   return String();
+}
+
+void notFound(AsyncWebServerRequest *request) {
+    request->send(404, "text/plain", "Not found");
 }
 
 // function to print a device address
@@ -227,16 +209,24 @@ void setup(){
   // Print ESP Local IP Address
   Serial.println(WiFi.localIP());
 
+/*
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send(200, "text/plain", "Hello, world");
+  });
+*/
+
   // Route for root / web page
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", index_html, processor);
   });
+
+
   server.on("/temperaturec", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", readDSTemperatureC().c_str());
   });
-  server.on("/temperaturef", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/plain", readDSTemperatureF().c_str());
-  });
+
+  server.onNotFound(notFound);
+
   // Start server
   server.begin();
 }
@@ -250,21 +240,25 @@ void loop(){
   	digitalWrite(LED_BUILTIN, LOW);
 
 	// Loop through each device, print out temperature data
+  	Serial.print("Temperatures: ");
 	for(int i=0;i<numberOfDevices; i++){
 		// Search the wire for address
 		if(sensors.getAddress(tempDeviceAddress, i)){
 		  // Output the device ID
-		  Serial.print("Temperature for device: ");
-		  Serial.println(i,DEC);
+		  Serial.print("device: ");
+		  Serial.print(i,DEC);
 		  // Print the data
 		  float tempC = sensors.getTempC(tempDeviceAddress);
 
-		  Serial.print("Temp C: ");
+		  Serial.print(" Temp : ");
 		  Serial.print(tempC);
-		  Serial.println("°C");
+		  Serial.print("°C   ");
 
+		  tempMain = tempC;
 		}
 	}
+	Serial.println("");
+
 	digitalWrite(LED_BUILTIN, HIGH);
 
 
