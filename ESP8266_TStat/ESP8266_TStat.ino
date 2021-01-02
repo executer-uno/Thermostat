@@ -16,6 +16,9 @@
 #endif
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <EEPROM.h>
+
+#include <DNSServer.h>
 
 #include "Secrets.h"
 
@@ -48,9 +51,65 @@ DeviceAddress tempDeviceAddress;
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
+/* Soft AP network parameters */
+IPAddress apIP(8, 8, 8, 8);
+IPAddress netMsk(255, 255, 255, 0);
+
+const byte DNS_PORT = 53;
+DNSServer dnsServer;
+
+/* hostname for mDNS. Should work at least on windows. Try http://esp8266.local */
+const char *myHostname = own_ssid;
+
 
 // Main sensor temperature
 float tempMain = -127.00;
+
+/* Don't set this parameters. They are configurated at runtime and stored on EEPROM */
+float 	PAR_limit = 10;
+int		PAR_index = 0;
+
+// Loop tasks calls rescaler
+int rescale = 0;
+
+/** Load parameters from EEPROM */
+bool loadParameters() {
+
+  float 	temp_PAR_limit = 0;
+  int		temp_PAR_index = 0;
+
+  EEPROM.begin(512);
+  EEPROM.get(0, temp_PAR_limit);
+  EEPROM.get(0 + sizeof(temp_PAR_limit), temp_PAR_index);
+  char ok[2 + 1];
+  EEPROM.get(0 + sizeof(temp_PAR_limit) + sizeof(temp_PAR_index), ok);
+  EEPROM.end();
+  if ((String(ok) != String("OK"))||(PAR_index < 0)) {
+
+	  Serial.println("EEPROM parameters reading error");
+	  return false;
+  }
+
+  PAR_limit = temp_PAR_limit;
+  PAR_index = temp_PAR_index;
+
+  Serial.println("Parameters from EEPROM:");
+  Serial.println(PAR_limit);
+  Serial.println(PAR_index);
+  return true;
+}
+
+/** Store parameters to EEPROM */
+void saveParameters() {
+  EEPROM.begin(512);
+  EEPROM.put(0, PAR_limit);
+  EEPROM.put(0 + sizeof(PAR_limit), PAR_index);
+  char ok[2 + 1] = "OK";
+  EEPROM.put(0 + sizeof(PAR_limit) + sizeof(PAR_index), ok);
+  EEPROM.commit();
+  EEPROM.end();
+}
+
 
 String readDSTemperatureC() {
 	/*								// - sensor call crushes runtime
@@ -62,11 +121,11 @@ String readDSTemperatureC() {
 	float tempC = tempMain;
 
 	if(tempC == -127.00) {
-	Serial.println("Failed to read from DS18B20 sensor");
+		//Serial.println("Failed to read from DS18B20 sensor");
 	return "--";
 	} else {
-	Serial.print("Temperature Celsius: ");
-	Serial.println(tempC);
+		//Serial.print("Temperature Celsius: ");
+		//Serial.println(tempC);
 	}
 	return String(tempC);
 }
@@ -76,7 +135,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+
   <style>
     html {
      font-family: Arial;
@@ -92,15 +151,36 @@ const char index_html[] PROGMEM = R"rawliteral(
       vertical-align:middle;
       padding-bottom: 15px;
     }
+	.icon {
+		width: 3.0rem;
+		height: 3.0rem;
+		fill: #059e8a;
+	}
   </style>
+  <svg style="display: none;">
+  <symbol id="thermometer-half">
+	<path d="M192 384c0 35.346-28.654 64-64 64s-64-28.654-64-64c0-23.685 12.876-44.349 32-55.417V224c0-17.673 14.327-32 32-32s32 14.327 32 32v104.583c19.124 11.068 32 31.732 32 55.417zm32-84.653c19.912 22.563 32 52.194 32 84.653 0 70.696-57.303 128-128 128-.299 0-.609-.001-.909-.003C56.789 511.509-.357 453.636.002 383.333.166 351.135 12.225 321.755 32 299.347V96c0-53.019 42.981-96 96-96s96 42.981 96 96v203.347zM208 384c0-34.339-19.37-52.19-32-66.502V96c0-26.467-21.533-48-48-48S80 69.533 80 96v221.498c-12.732 14.428-31.825 32.1-31.999 66.08-.224 43.876 35.563 80.116 79.423 80.42L128 464c44.112 0 80-35.888 80-80z"/>
+  </symbol>
+  </svg>
+
 </head>
 <body>
-  <h2>ESP DS18B20 Server</h2>
+  <h2>Термостат</h2>
   <p>
-    <i class="fas fa-thermometer-half" style="color:#059e8a;"></i> 
-    <span class="ds-labels">Temperature Celsius</span> 
+    <span class="ds-icon">
+		<svg class="icon" viewBox="0 0 300 550" ><use class="icon" xlink:href="#thermometer-half" x="0" y="0" /></svg>
+    </span> 
+    <span class="ds-labels">Температура</span> 
     <span id="temperaturec">%TEMPERATUREC%</span>
     <sup class="units">&deg;C</sup>
+  </p>
+  <p>
+	<form method='POST' action='saveparams'><h3>Настройки</h3>
+
+	<input type="number" id="limit" name="limit" min="-55" max="125" value="%LIMIT%">
+	<input type="number" id="index" name="index" min="1" max="9" value="%INDEX%">
+
+    <br /><input type='submit' value='Сохранить'/></form>
   </p>
 </body>
 
@@ -127,12 +207,51 @@ String processor(const String& var){
   if(var == "TEMPERATUREC"){
     return readDSTemperatureC();
   }
+  else if(var == "LIMIT"){
+    return String(PAR_limit);
+  }
+  else if(var == "INDEX"){
+    return String(PAR_index);
+  }
+
   return String();
 }
 
+
+/** Handle the reboot request from web server */
+void handleReboot(AsyncWebServerRequest *request) {
+  Serial.println("ESP Reboot from web server");
+  server.end(); // Stop is needed because we sent no content length
+  ESP.restart();
+}
+/** Handle the reboot request from web server */
+void handleRoot(AsyncWebServerRequest *request) {
+  Serial.println("Root page from web server");
+  request->send_P(200, "text/html", index_html, processor);
+}
 void notFound(AsyncWebServerRequest *request) {
     request->send(404, "text/plain", "Not found");
 }
+/** Handle the WLAN save form and redirect to WLAN config page again */
+void handleSaveParams(AsyncWebServerRequest *request) {
+  Serial.println("parameters save");
+
+  PAR_limit = request->arg("limit").toFloat();
+  PAR_index = request->arg("index").toInt();
+
+  AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "");
+
+  response->addHeader("Location", "wifi");
+  response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  response->addHeader("Pragma", "no-cache");
+  response->addHeader("Expires", "-1");
+
+  request->send(response);
+  request->client()->stop();// Stop is needed because we sent no content length
+
+  saveParameters();
+}
+
 
 // function to print a device address
 void printAddress(DeviceAddress deviceAddress) {
@@ -143,6 +262,7 @@ void printAddress(DeviceAddress deviceAddress) {
 }
 
 void setup(){
+  delay(1000);
 
   // Serial port for debugging purposes
   Serial.begin(76800);
@@ -196,73 +316,79 @@ void setup(){
     }
   }
 
+  // Rise own wifi point
+  WiFi.softAPConfig(apIP, apIP, netMsk);
+  WiFi.softAP(own_ssid, own_password);
+  delay(500); // Without delay I've seen the IP address blank
+  IPAddress IP = WiFi.softAPIP();
+  Serial.print("AP IP address: ");
+  Serial.println(IP);
 
-  // Connect to Wi-Fi
-  WiFi.begin(ssid, password);
-  Serial.println("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println();
+  dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+  dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
 
-  // Print ESP Local IP Address
-  Serial.println(WiFi.localIP());
-
-/*
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-      request->send(200, "text/plain", "Hello, world");
-  });
-*/
-
+  /* Setup web pages*/
   // Route for root / web page
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", index_html, processor);
-  });
+  server.on("/", handleRoot);
+  server.on("/generate_204", handleRoot);  	//Android captive portal. Maybe not needed. Might be handled by notFound handler.
+  server.on("/fwlink", handleRoot);  		//Microsoft captive portal. Maybe not needed. Might be handled by notFound handler.
+  server.on("/saveparams", handleSaveParams);
 
 
   server.on("/temperaturec", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", readDSTemperatureC().c_str());
   });
 
+
+  server.on("/reboot", handleReboot);
   server.onNotFound(notFound);
 
   // Start server
   server.begin();
+  Serial.println("HTTP server started");
+
+
+  loadParameters(); // Load parameters from EEPROM
 }
 
 void loop(){
 
-	digitalWrite(LED_G, LOW);										// LED ON
-	sensors.requestTemperatures(); // Send the command to get temperatures
-	digitalWrite(LED_G, HIGH);										// LED OFF
+	if ( rescale > 100 ){
 
-  	digitalWrite(LED_BUILTIN, LOW);
+		rescale = 0;
 
-	// Loop through each device, print out temperature data
-  	Serial.print("Temperatures: ");
-	for(int i=0;i<numberOfDevices; i++){
-		// Search the wire for address
-		if(sensors.getAddress(tempDeviceAddress, i)){
-		  // Output the device ID
-		  Serial.print("device: ");
-		  Serial.print(i,DEC);
-		  // Print the data
-		  float tempC = sensors.getTempC(tempDeviceAddress);
+		digitalWrite(LED_G, LOW);										// LED ON
+		sensors.requestTemperatures(); // Send the command to get temperatures
+		digitalWrite(LED_G, HIGH);										// LED OFF
 
-		  Serial.print(" Temp : ");
-		  Serial.print(tempC);
-		  Serial.print("°C   ");
+		digitalWrite(LED_BUILTIN, LOW);
 
-		  tempMain = tempC;
+		// Loop through each device, print out temperature data
+		Serial.print("Temperatures: ");
+		for(int i=0;i<numberOfDevices; i++){
+			// Search the wire for address
+			if(sensors.getAddress(tempDeviceAddress, i)){
+			  // Output the device ID
+			  Serial.print("device: ");
+			  Serial.print(i,DEC);
+			  // Print the data
+			  float tempC = sensors.getTempC(tempDeviceAddress);
+
+			  Serial.print(" Temp : ");
+			  Serial.print(tempC);
+			  Serial.print("°C   ");
+
+			  tempMain = tempC;
+			}
 		}
+		Serial.println("");
+
+		digitalWrite(LED_BUILTIN, HIGH);
 	}
-	Serial.println("");
 
-	digitalWrite(LED_BUILTIN, HIGH);
-
-
-	delay(5000);
+	rescale++;
+	delay(100);
+	dnsServer.processNextRequest();
 	yield();
 
 }
