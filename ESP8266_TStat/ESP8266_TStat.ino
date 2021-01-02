@@ -156,6 +156,10 @@ const char index_html[] PROGMEM = R"rawliteral(
 		height: 3.0rem;
 		fill: #059e8a;
 	}
+	button[type=submit] {
+		width: 15.0rem;  height: 3.0rem;
+		font-size: 2.0rem;
+	}
   </style>
   <svg style="display: none;">
   <symbol id="thermometer-half">
@@ -170,17 +174,14 @@ const char index_html[] PROGMEM = R"rawliteral(
     <span class="ds-icon">
 		<svg class="icon" viewBox="0 0 300 550" ><use class="icon" xlink:href="#thermometer-half" x="0" y="0" /></svg>
     </span> 
-    <span class="ds-labels">Температура</span> 
+    <span class="ds-labels"></span> 
     <span id="temperaturec">%TEMPERATUREC%</span>
     <sup class="units">&deg;C</sup>
   </p>
   <p>
-	<form method='POST' action='saveparams'><h3>Настройки</h3>
-
-	<input type="number" id="limit" name="limit" min="-55" max="125" value="%LIMIT%">
-	<input type="number" id="index" name="index" min="1" max="9" value="%INDEX%">
-
-    <br /><input type='submit' value='Сохранить'/></form>
+	<form action="/config" method="GET">
+		<button type="submit" >Настройки</button>
+	</form>
   </p>
 </body>
 
@@ -201,6 +202,109 @@ setInterval(function ( ) {
 
 </html>)rawliteral";
 
+
+
+
+const char settings_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE HTML><html>
+<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	
+	<style>
+		html {
+			font-family: Arial;
+			display: inline-block;
+			margin: 0px auto;
+			text-align: center;
+		}
+		h2 { font-size: 3.0rem; }
+		p { font-size: 3.0rem; }
+		.units { font-size: 2.0rem; }
+		.ds-labels{
+			font-size: 1.5rem;
+			vertical-align:middle;
+			padding-bottom: 15px;
+		}
+		button {
+			font-size: 2.0rem;
+		}
+		button[type=submit] {
+			width: 15.0rem;  height: 3.0rem;
+			font-size: 2.0rem;
+		}
+
+
+        input[type="number"] {
+          -webkit-appearance: textfield;
+          -moz-appearance: textfield;
+          appearance: textfield;
+        }
+
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+          -webkit-appearance: none;
+        }
+
+        .number-input {
+          border: 2px solid #ddd;
+          display: inline-flex;
+        }
+
+        .number-input,
+        .number-input * {
+          box-sizing: border-box;
+        }
+
+        .number-input button {
+          outline:none;
+          -webkit-appearance: none;
+          background-color: transparent;
+          border: none;
+          align-items: center;
+          justify-content: center;
+          width: 3rem;
+          height: 3rem;
+          cursor: pointer;
+          margin: 0;
+          position: relative;
+        }
+
+        .number-input input[type=number] {
+          font-family: sans-serif;
+          max-width: 5rem;
+          padding: .5rem;
+          border: solid #ddd;
+          border-width: 0 2px;
+          font-size: 2rem;
+          height: 3rem;
+          font-weight: bold;
+          text-align: center;
+        }
+
+	</style>
+</head>
+<body>
+	<p>
+	<form method='POST' action='saveparams'><h2>Настройки</h2>
+		<div class="number-input">
+			<button onclick="this.parentNode.querySelector('input[name=limit]').stepDown()" >-</button>
+			<input class="quantity" type="number" id="limit" name="limit" min="-55" max="125" value="%LIMIT%">
+			<button onclick="this.parentNode.querySelector('input[name=limit]').stepUp()">+</button>
+		</div>
+		<sup class="units">&deg;C</sup>
+		<!--
+		<p><button type="submit" formaction='saveparams'>Сохранить</button></p>
+		-->
+	</form>
+	</p><p>
+	<form action="/" method="GET">
+		<button type="submit">Вернуться</button>
+	</form>
+	</p>
+</body>
+</html>)rawliteral";
+
+
 // Replaces placeholder with DHT values
 String processor(const String& var){
   //Serial.println(var);
@@ -208,7 +312,7 @@ String processor(const String& var){
     return readDSTemperatureC();
   }
   else if(var == "LIMIT"){
-    return String(PAR_limit);
+    return String((int)PAR_limit);
   }
   else if(var == "INDEX"){
     return String(PAR_index);
@@ -217,6 +321,26 @@ String processor(const String& var){
   return String();
 }
 
+/** Is this an IP? */
+boolean isIp(String str) {
+  for (size_t i = 0; i < str.length(); i++) {
+    int c = str.charAt(i);
+    if (c != '.' && (c < '0' || c > '9')) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** IP to String? */
+String toStringIp(IPAddress ip) {
+  String res = "";
+  for (int i = 0; i < 3; i++) {
+    res += String((ip >> (8 * i)) & 0xFF) + ".";
+  }
+  res += String(((ip >> 8 * 3)) & 0xFF);
+  return res;
+}
 
 /** Handle the reboot request from web server */
 void handleReboot(AsyncWebServerRequest *request) {
@@ -224,24 +348,68 @@ void handleReboot(AsyncWebServerRequest *request) {
   server.end(); // Stop is needed because we sent no content length
   ESP.restart();
 }
-/** Handle the reboot request from web server */
+/** Handle the root page from web server */
 void handleRoot(AsyncWebServerRequest *request) {
   Serial.println("Root page from web server");
   request->send_P(200, "text/html", index_html, processor);
 }
-void notFound(AsyncWebServerRequest *request) {
-    request->send(404, "text/plain", "Not found");
+/** Handle the root page from web server */
+void handleConfigPage(AsyncWebServerRequest *request) {
+  Serial.println("Config page from web server");
+  request->send_P(200, "text/html", settings_html, processor);
 }
+
+void handleNotFound(AsyncWebServerRequest *request) {
+  if (captivePortal(request)) { // If caprive portal redirect instead of displaying the error page.
+    return;
+  }
+  String message = F("File Not Found\n\n");
+  message += F("URI: ");
+  message += request->url();
+  message += F("\nMethod: ");
+  message += (request->method() == HTTP_GET) ? "GET" : "POST";
+  message += F("\nArguments: ");
+  message += request->args();
+  message += F("\n");
+
+  for (uint8_t i = 0; i < request->args(); i++) {
+    message += String(F(" ")) + request->argName(i) + F(": ") + request->arg(i) + F("\n");
+  }
+
+  AsyncWebServerResponse *response = request->beginResponse(404, "text/plain", message); //Sends 404 File Not Found
+  response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  response->addHeader("Pragma", "no-cache");
+  response->addHeader("Expires", "-1");
+
+  request->send(response);
+
+}
+
+/** Redirect to captive portal if we got a request for another domain. Return true in that case so the page handler do not try to handle the request again. */
+boolean captivePortal(AsyncWebServerRequest *request) {
+  if (!isIp(request->host()) && request->host() != (String(myHostname) + ".local")) {
+    Serial.println("Request redirected to captive portal");
+
+    AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "");
+    response->addHeader("Location", String("http://") + toStringIp(request->client()->localIP()));
+    request->send(response);
+    request->client()->stop();// Stop is needed because we sent no content length
+
+    return true;
+  }
+  return false;
+}
+
+
 /** Handle the WLAN save form and redirect to WLAN config page again */
 void handleSaveParams(AsyncWebServerRequest *request) {
   Serial.println("parameters save");
 
   PAR_limit = request->arg("limit").toFloat();
-  PAR_index = request->arg("index").toInt();
 
   AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "");
 
-  response->addHeader("Location", "wifi");
+  response->addHeader("Location", "config");
   response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   response->addHeader("Pragma", "no-cache");
   response->addHeader("Expires", "-1");
@@ -330,10 +498,10 @@ void setup(){
   /* Setup web pages*/
   // Route for root / web page
   server.on("/", handleRoot);
+  server.on("/config", handleConfigPage);
   server.on("/generate_204", handleRoot);  	//Android captive portal. Maybe not needed. Might be handled by notFound handler.
   server.on("/fwlink", handleRoot);  		//Microsoft captive portal. Maybe not needed. Might be handled by notFound handler.
   server.on("/saveparams", handleSaveParams);
-
 
   server.on("/temperaturec", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", readDSTemperatureC().c_str());
@@ -341,7 +509,7 @@ void setup(){
 
 
   server.on("/reboot", handleReboot);
-  server.onNotFound(notFound);
+  server.onNotFound(handleNotFound);
 
   // Start server
   server.begin();
@@ -382,6 +550,14 @@ void loop(){
 			}
 		}
 		Serial.println("");
+
+		// Temperature control
+		if(tempMain < PAR_limit){
+			digitalWrite(LOAD, HIGH);
+		}
+		if(tempMain > PAR_limit + 1.0){
+			digitalWrite(LOAD, LOW);
+		}
 
 		digitalWrite(LED_BUILTIN, HIGH);
 	}
