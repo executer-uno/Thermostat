@@ -13,8 +13,9 @@
 	const char index_html[] PROGMEM = R"rawliteral(
 	<!DOCTYPE HTML><html>
 	<head>
-	  <meta name="viewport" content="width=device-width, initial-scale=1">
-	
+		<title>Термостат</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<link rel="icon" href="data:,">
 	  <style>
 		html {
 		 font-family: Arial;
@@ -24,7 +25,7 @@
 		}
 		h2 { font-size: 3.0rem; }
 		p { font-size: 3.0rem; }
-		.units { font-size: 1.2rem; }
+		.units { font-size: 2.0rem; }
 		.ds-labels{
 		  font-size: 1.5rem;
 		  vertical-align:middle;
@@ -48,7 +49,7 @@
 	
 	</head>
 	<body>
-	  <h2>Термостат</h2>
+	  <h2>Термостат (%LIMIT% &deg;C)</h2>
 	  <p>
 		<span class="ds-icon">
 			<svg class="icon" viewBox="0 0 300 550" ><use class="icon" xlink:href="#thermometer-half" x="0" y="0" /></svg>
@@ -79,7 +80,8 @@
 	
 	</script>
 	
-	</html>)rawliteral";
+	</html>
+)rawliteral";
 
 
 
@@ -87,8 +89,9 @@
 	const char settings_html[] PROGMEM = R"rawliteral(
 	<!DOCTYPE HTML><html>
 	<head>
+		<title>Термостат</title>
 		<meta name="viewport" content="width=device-width, initial-scale=1">
-		
+		<link rel="icon" href="data:,">
 		<style>
 			html {
 				font-family: Arial;
@@ -97,7 +100,7 @@
 				text-align: center;
 			}
 			h2 { font-size: 3.0rem; }
-			p { font-size: 3.0rem; }
+			p { font-size: 2.0rem; }
 			.units { font-size: 2.0rem; }
 			.ds-labels{
 				font-size: 1.5rem;
@@ -159,11 +162,18 @@
 			  font-weight: bold;
 			  text-align: center;
 			}
+
+			body {max-width: 600px; margin:0px auto; padding-bottom: 25px;}
+			.switch {position: relative; display: inline-block; width: 120px; height: 68px} 
+			.switch input {display: none}
+			.slider {position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; border-radius: 6px}
+			.slider:before {position: absolute; content: ""; height: 52px; width: 52px; left: 8px; bottom: 8px; background-color: #fff; -webkit-transition: .4s; transition: .4s; border-radius: 3px}
+			input:checked+.slider {background-color: #b30000}
+			input:checked+.slider:before {-webkit-transform: translateX(52px); -ms-transform: translateX(52px); transform: translateX(52px)}
 	
 		</style>
 	</head>
 	<body>
-		<p>
 		<form method='POST' action='saveparams'><h2>Настройки</h2>
 			<div class="number-input">
 				<button onclick="this.parentNode.querySelector('input[name=limit]').stepDown()" >-</button>
@@ -171,17 +181,26 @@
 				<button onclick="this.parentNode.querySelector('input[name=limit]').stepUp()">+</button>
 			</div>
 			<sup class="units">&deg;C</sup>
-			<!--
-			<p><button type="submit" formaction='saveparams'>Сохранить</button></p>
-			-->
 		</form>
-		</p><p>
+		<p>
+			<span>Охлаждение</<span>
+			<label class="switch"><input type="checkbox" onchange="toggleCheckbox(this)" id="heater" %HEATER%><span class="slider"></span></label>
+			<span>Нагрев</<span>
+			<script>
+				function toggleCheckbox(element) {
+					var xhr = new XMLHttpRequest();
+					if(element.checked){ xhr.open("GET", "/update?output="+element.id+"&state=1", true); }
+					else { xhr.open("GET", "/update?output="+element.id+"&state=0", true); }
+					xhr.send();
+				}
+			</script>
+		</p>
 		<form action="/" method="GET">
 			<button type="submit">Вернуться</button>
 		</form>
-		</p>
 	</body>
-	</html>)rawliteral";
+	</html>
+)rawliteral";
 
 
 

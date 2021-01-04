@@ -77,6 +77,8 @@ float 	PAR_limit = 10;
 float 	PAR_limit_prev = PAR_limit;
 int		PAR_index = 0;
 int		PAR_index_prev = PAR_index;
+int		PAR_heater = 0;							// Load type. Heater = 1 (load on if temperature less than set point). Cooler = 0 (load on if temperature higher than set point)
+int		PAR_heater_prev = PAR_heater;
 
 // last update
 unsigned long lastPARUpdate = millis();
@@ -87,14 +89,16 @@ int rescale = 0;
 /** Load parameters from EEPROM */
 bool loadParameters() {
 
-  float 	temp_PAR_limit = 0;
-  int		temp_PAR_index = 0;
+  float 	temp_PAR_limit  = 0;
+  int		temp_PAR_index  = 0;
+  int		temp_PAR_heater = 0;
 
   EEPROM.begin(512);
-  EEPROM.get(0, temp_PAR_limit);
-  EEPROM.get(0 + sizeof(temp_PAR_limit), temp_PAR_index);
+  EEPROM.get(0, 													temp_PAR_limit);
+  EEPROM.get(0 + sizeof(temp_PAR_limit), 							temp_PAR_index);
+  EEPROM.get(0 + sizeof(temp_PAR_limit) + sizeof(temp_PAR_index), 	temp_PAR_heater);
   char ok[2 + 1];
-  EEPROM.get(0 + sizeof(temp_PAR_limit) + sizeof(temp_PAR_index), ok);
+  EEPROM.get(0 + sizeof(temp_PAR_limit) + sizeof(temp_PAR_index) + sizeof(temp_PAR_heater), ok);
   EEPROM.end();
   if ((String(ok) != String("OK"))||(PAR_index < 0)) {
 
@@ -104,13 +108,16 @@ bool loadParameters() {
 
   PAR_limit = temp_PAR_limit;
   PAR_index = temp_PAR_index;
+  PAR_heater = temp_PAR_heater;
 
-  PAR_limit_prev = PAR_limit;		// Save values to compare later for EEPROM update
-  PAR_index_prev = PAR_index;
+  PAR_limit_prev  = PAR_limit;		// Save values to compare later for EEPROM update
+  PAR_index_prev  = PAR_index;
+  PAR_heater_prev = PAR_heater;
 
   Serial.println("Parameters from EEPROM:");
   Serial.println(PAR_limit);
   Serial.println(PAR_index);
+  Serial.println(PAR_heater);
   return true;
 }
 
@@ -119,14 +126,16 @@ void saveParameters() {
   EEPROM.begin(512);
   EEPROM.put(0, PAR_limit);
   EEPROM.put(0 + sizeof(PAR_limit), PAR_index);
+  EEPROM.put(0 + sizeof(PAR_limit) + sizeof(PAR_index), PAR_heater);
   char ok[2 + 1] = "OK";
-  EEPROM.put(0 + sizeof(PAR_limit) + sizeof(PAR_index), ok);
+  EEPROM.put(0 + sizeof(PAR_limit) + sizeof(PAR_index) + sizeof(PAR_heater), ok);
   EEPROM.commit();
   EEPROM.end();
 
-  PAR_limit_prev = PAR_limit;		// Save values to compare later for EEPROM update
-  PAR_index_prev = PAR_index;
-  Serial.println("parameters saved to EEPROM");
+  PAR_limit_prev  = PAR_limit;		// Save values to compare later for EEPROM update
+  PAR_index_prev  = PAR_index;
+  PAR_heater_prev = PAR_heater;
+  Serial.println("Parameters saved to EEPROM");
 
 }
 
@@ -163,7 +172,14 @@ String processor(const String& var){
   else if(var == "INDEX"){
     return String(PAR_index);
   }
-
+  else if(var == "HEATER"){
+	  if(PAR_heater){
+	    return "checked";
+	  }
+	  else {
+	    return "";
+	  }
+  }
   return String();
 }
 
@@ -249,7 +265,7 @@ boolean captivePortal(AsyncWebServerRequest *request) {
 
 /** Handle the WLAN save form and redirect to WLAN config page again */
 void handleSaveParams(AsyncWebServerRequest *request) {
-  Serial.println("parameters updated");
+  Serial.println("handleSaveParams called");
 
   PAR_limit = request->arg("limit").toFloat();
 
@@ -266,6 +282,34 @@ void handleSaveParams(AsyncWebServerRequest *request) {
   lastPARUpdate	 = millis();	// Parameters was updated from web server
 }
 
+/** Handle the WLAN save form and redirect to WLAN config page again */
+void handleUpdate(AsyncWebServerRequest *request) {
+  Serial.println("handleUpdate called");
+
+  String inputMessage1;
+  String inputMessage2;
+
+  // GET input1 value on <ESP_IP>/update?output=<inputMessage1>&state=<inputMessage2>
+  if (request->hasParam("output") && request->hasParam("state")) {
+    inputMessage1 = request->getParam("output")->value();
+    inputMessage2 = request->getParam("state")->value();
+
+    if(inputMessage1 == "heater"){
+    	PAR_heater = inputMessage2.toInt();
+    	lastPARUpdate	 = millis();	// Parameters was updated from web server
+    }
+  }
+  else {
+    inputMessage1 = "No message sent";
+    inputMessage2 = "No message sent";
+  }
+  Serial.print("Update parameter: ");
+  Serial.print(inputMessage1);
+  Serial.print(" - Set to: ");
+  Serial.println(inputMessage2);
+  request->send(200, "text/plain", "OK");
+
+}
 
 // function to print a device address
 void printAddress(DeviceAddress deviceAddress) {
@@ -343,11 +387,12 @@ void setup(){
 
   /* Setup web pages*/
   // Route for root / web page
-  server.on("/", handleRoot);
-  server.on("/config", handleConfigPage);
+  server.on("/",			 handleRoot);
+  server.on("/config", 		 handleConfigPage);
   server.on("/generate_204", handleRoot);  	//Android captive portal. Maybe not needed. Might be handled by notFound handler.
-  server.on("/fwlink", handleRoot);  		//Microsoft captive portal. Maybe not needed. Might be handled by notFound handler.
-  server.on("/saveparams", handleSaveParams);
+  server.on("/fwlink", 		 handleRoot);  		//Microsoft captive portal. Maybe not needed. Might be handled by notFound handler.
+  server.on("/saveparams", 	 handleSaveParams);
+  server.on("/update", 		 handleUpdate);
 
   server.on("/temperaturec", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", readDSTemperatureC().c_str());
@@ -459,7 +504,7 @@ void loop(){
 		digitalWrite(LED_BUILTIN, HIGH);
 
 		// Check if parameters to be saved in EEPROM
-		if(((PAR_limit_prev != PAR_limit) || (PAR_index_prev != PAR_index)) && (millis() - lastPARUpdate > 20* 1000)){
+		if(((PAR_limit_prev != PAR_limit) || (PAR_index_prev != PAR_index) || (PAR_heater_prev != PAR_heater)) && (millis() - lastPARUpdate > 20* 1000)){
 			saveParameters();
 		}
 	}
