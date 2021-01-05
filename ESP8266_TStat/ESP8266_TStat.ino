@@ -23,6 +23,8 @@
 #include <ArduinoOTA.h>
 #include <ESP8266mDNS.h>
 
+#include <Ticker.h>  //Ticker Library
+
 #include "Secrets.h"
 #include "HTML.h"
 
@@ -40,6 +42,8 @@
 
 	// Load switch control output
 	#define LOAD			15		// D8
+
+	#define LED_PERIOD		50		// in ms
 
 
 // Setup a oneWire instance to communicate with any OneWire devices
@@ -83,8 +87,26 @@ int		PAR_heater_prev = PAR_heater;
 // last update
 unsigned long lastPARUpdate = millis();
 
-// Loop tasks calls rescaler
-int rescale = 0;
+Ticker Sensor_Call;
+Ticker LED_Call;
+Ticker Param_Call;
+Ticker Button_Call;
+
+struct ButtonStruct {
+	uint capFilter;				// input signal jitter filter
+	uint capPress;				// pressed timer
+	uint capRelease;			// released timer
+	bool Pressed;				// Button pressed state
+	bool ShortPress_RS;			// Short button press. Set once on release
+	bool LongPress_RS;			// Long button press. Set once on release
+};
+ButtonStruct Button;
+
+bool Load_ON = false;
+
+bool Sensor_Call_Flag = false;	// Sensors can not be called inside ticker interrupt
+
+uint16_t LED_Counter=0;
 
 /** Load parameters from EEPROM */
 bool loadParameters() {
@@ -123,20 +145,22 @@ bool loadParameters() {
 
 /** Store parameters to EEPROM */
 void saveParameters() {
-  EEPROM.begin(512);
-  EEPROM.put(0, PAR_limit);
-  EEPROM.put(0 + sizeof(PAR_limit), PAR_index);
-  EEPROM.put(0 + sizeof(PAR_limit) + sizeof(PAR_index), PAR_heater);
-  char ok[2 + 1] = "OK";
-  EEPROM.put(0 + sizeof(PAR_limit) + sizeof(PAR_index) + sizeof(PAR_heater), ok);
-  EEPROM.commit();
-  EEPROM.end();
+	// Check if parameters to be saved in EEPROM
+	if(((PAR_limit_prev != PAR_limit) || (PAR_index_prev != PAR_index) || (PAR_heater_prev != PAR_heater)) && (millis() - lastPARUpdate > 20* 1000)){
+		EEPROM.begin(512);
+		EEPROM.put(0, PAR_limit);
+		EEPROM.put(0 + sizeof(PAR_limit), PAR_index);
+		EEPROM.put(0 + sizeof(PAR_limit) + sizeof(PAR_index), PAR_heater);
+		char ok[2 + 1] = "OK";
+		EEPROM.put(0 + sizeof(PAR_limit) + sizeof(PAR_index) + sizeof(PAR_heater), ok);
+		EEPROM.commit();
+		EEPROM.end();
 
-  PAR_limit_prev  = PAR_limit;		// Save values to compare later for EEPROM update
-  PAR_index_prev  = PAR_index;
-  PAR_heater_prev = PAR_heater;
-  Serial.println("Parameters saved to EEPROM");
-
+		PAR_limit_prev  = PAR_limit;		// Save values to compare later for EEPROM update
+		PAR_index_prev  = PAR_index;
+		PAR_heater_prev = PAR_heater;
+		Serial.println("Parameters saved to EEPROM");
+	}
 }
 
 
@@ -373,6 +397,7 @@ void setup(){
       Serial.print(" but could not detect address. Check power and cabling");
     }
   }
+  sensors.requestTemperatures(); // Send the command to get temperatures
 
   // Rise own wifi point
   WiFi.softAPConfig(apIP, apIP, netMsk);
@@ -459,60 +484,128 @@ void setup(){
   ArduinoOTA.begin();
   Serial.println("OTA ready");
 
+  // Attach cycles
+  Param_Call.attach( 20.0, saveParameters);
+  Sensor_Call.attach(10.3, CallSensorsHandler);
+  LED_Call.attach_ms(LED_PERIOD, CallLED);
+  Button_Call.attach_ms(2, CallButtons);
+
+  digitalWrite(LED_BUILTIN, HIGH);
 }
+
+
+void CallButtons(){												// Button control
+	bool ButIn = !digitalRead(BUTTON);							// Input pulled up, button to ground
+	if(Button.capFilter < 5 && ButIn) 	Button.capFilter++;		// 10 ms capacitor
+	if(Button.capFilter > 0	&& !ButIn) 	Button.capFilter--;
+
+	if(Button.capFilter >= 5) 			Button.Pressed = true;
+	if(Button.capFilter <= 0) 			Button.Pressed = false;
+}
+
+
+void CallSensorsHandler(){
+	Sensor_Call_Flag=true;
+}
+
+
+void CallLED(){
+	if(Button.Pressed  && Button.capPress < UINT16_MAX ){
+		Button.capPress += LED_PERIOD;
+		Button.capRelease =0;
+	}
+	if(!Button.Pressed && Button.capRelease < UINT16_MAX ){
+		if(Button.capPress){
+			if(Button.capPress > 1000){
+				Button.LongPress_RS 		= true;
+				Serial.println("Button: Long press");
+			}
+			else if(Button.capPress){
+				Button.ShortPress_RS 		= true;
+			    Serial.println("Button: Short press");
+			}
+		}
+		Button.capPress = 0;
+		Button.capRelease += LED_PERIOD;
+	}
+
+	digitalWrite(LED_R, HIGH);	// Switch off all colors
+	digitalWrite(LED_G, HIGH);
+	digitalWrite(LED_B, HIGH);
+
+	if(LED_Counter < 5000/LED_PERIOD){
+
+		if(Load_ON){
+			if(PAR_heater) 	digitalWrite(LED_R, LOW);		// Heating
+			else     		digitalWrite(LED_B, LOW);		// Cooling
+		}
+		LED_Counter++;
+	}
+	else {
+
+		digitalWrite(LED_G, LOW);	// Alive blink
+
+		LED_Counter = 0;
+	}
+}
+
+
+void CallSensors(){
+	digitalWrite(LED_BUILTIN, LOW);
+	sensors.requestTemperatures(); // Send the command to get temperatures
+
+	// Loop through each device, print out temperature data
+	Serial.print("Temperatures: ");
+	for(int i=0;i<numberOfDevices; i++){
+		// Search the wire for address
+		if(sensors.getAddress(tempDeviceAddress, i)){
+		  // Output the device ID
+		  Serial.print("device: ");
+		  Serial.print(i,DEC);
+		  // Print the data
+		  float tempC = sensors.getTempC(tempDeviceAddress);
+
+		  Serial.print(" Temp : ");
+		  Serial.print(tempC);
+		  Serial.print("°C   ");
+
+		  tempMain = tempC;
+		}
+	}
+	Serial.println("");
+
+	// Temperature control
+	if(PAR_heater){												// Load - Heater
+		if(tempMain < PAR_limit) 		Load_ON	= true;
+		if(tempMain > PAR_limit + 1.0)	Load_ON	= false;
+	}
+	else{														// Load - Cooler
+		if(tempMain > PAR_limit) 		Load_ON	= true;
+		if(tempMain < PAR_limit - 1.0)	Load_ON	= false;
+	}
+
+	digitalWrite(LED_BUILTIN, HIGH);
+}
+
 
 void loop(){
 
-	if ( rescale > 100 ){
-
-		rescale = 0;
-
-		digitalWrite(LED_G, LOW);										// LED ON
-		sensors.requestTemperatures(); // Send the command to get temperatures
-		digitalWrite(LED_G, HIGH);										// LED OFF
-
-		digitalWrite(LED_BUILTIN, LOW);
-
-		// Loop through each device, print out temperature data
-		Serial.print("Temperatures: ");
-		for(int i=0;i<numberOfDevices; i++){
-			// Search the wire for address
-			if(sensors.getAddress(tempDeviceAddress, i)){
-			  // Output the device ID
-			  Serial.print("device: ");
-			  Serial.print(i,DEC);
-			  // Print the data
-			  float tempC = sensors.getTempC(tempDeviceAddress);
-
-			  Serial.print(" Temp : ");
-			  Serial.print(tempC);
-			  Serial.print("°C   ");
-
-			  tempMain = tempC;
-			}
-		}
-		Serial.println("");
-
-		// Temperature control
-		if(tempMain < PAR_limit){
-			digitalWrite(LOAD, HIGH);
-		}
-		if(tempMain > PAR_limit + 1.0){
-			digitalWrite(LOAD, LOW);
-		}
-
-		digitalWrite(LED_BUILTIN, HIGH);
-
-		// Check if parameters to be saved in EEPROM
-		if(((PAR_limit_prev != PAR_limit) || (PAR_index_prev != PAR_index) || (PAR_heater_prev != PAR_heater)) && (millis() - lastPARUpdate > 20* 1000)){
-			saveParameters();
-		}
+	// Sensors data request *****************************************************
+	if(Sensor_Call_Flag){
+		CallSensors();
+		Sensor_Call_Flag = false;
 	}
 
-	rescale++;
-	delay(100);
+	// Load control		*********************************************************
+	if(Load_ON){
+		digitalWrite(LOAD, HIGH);
+	}
+	else{
+		digitalWrite(LOAD, LOW);
+	}
+
+	// Aux tasks		*********************************************************
 	dnsServer.processNextRequest();
 	ArduinoOTA.handle();
 	yield();
-
 }
