@@ -574,6 +574,8 @@ void CallSensors(){
 	}
 	Serial.println("");
 
+	PAR_heater = true;											// Constant, will be not adjustable from web interface
+
 	// Temperature control
 	if(PAR_heater){												// Load - Heater
 		if(tempMain < PAR_limit) 		Load_ON	= true;

@@ -184,6 +184,7 @@
 			<sup class="units">&deg;C</sup>
 		</form>
 		<p>
+<!--
 			<span>Нагрев<br></span>
 			<label class="switch"><input type="checkbox" onchange="toggleCheckbox(this)" id="heater" %HEATER%><span class="slider"></span></label>
 			<span><br>Охлаждение</span>
@@ -195,6 +196,7 @@
 					xhr.send();
 				}
 			</script>
+-->
 		</p>
 		<form action="/" method="GET">
 			<button type="submit">Вернуться</button>
