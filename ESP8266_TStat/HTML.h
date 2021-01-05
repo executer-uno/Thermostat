@@ -49,7 +49,8 @@
 	
 	</head>
 	<body>
-	  <h2>Термостат (%LIMIT% &deg;C)</h2>
+	  <h2>Термостат</h2>
+	  <h2>(%LIMIT% &deg;C)</h2>
 	  <p>
 		<span class="ds-icon">
 			<svg class="icon" viewBox="0 0 300 550" ><use class="icon" xlink:href="#thermometer-half" x="0" y="0" /></svg>
@@ -164,12 +165,12 @@
 			}
 
 			body {max-width: 600px; margin:0px auto; padding-bottom: 25px;}
-			.switch {position: relative; display: inline-block; width: 120px; height: 68px} 
+			.switch {position: relative; display: inline-block; width: 68px; height: 120px} 
 			.switch input {display: none}
-			.slider {position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; border-radius: 6px}
+			.slider {position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #0000b3; border-radius: 6px}
 			.slider:before {position: absolute; content: ""; height: 52px; width: 52px; left: 8px; bottom: 8px; background-color: #fff; -webkit-transition: .4s; transition: .4s; border-radius: 3px}
 			input:checked+.slider {background-color: #b30000}
-			input:checked+.slider:before {-webkit-transform: translateX(52px); -ms-transform: translateX(52px); transform: translateX(52px)}
+			input:checked+.slider:before {-webkit-transform: translateY(-52px); -ms-transform: translateY(-52px); transform: translateY(-52px)}
 	
 		</style>
 	</head>
@@ -183,9 +184,9 @@
 			<sup class="units">&deg;C</sup>
 		</form>
 		<p>
-			<span>Охлаждение</<span>
+			<span>Нагрев<br></span>
 			<label class="switch"><input type="checkbox" onchange="toggleCheckbox(this)" id="heater" %HEATER%><span class="slider"></span></label>
-			<span>Нагрев</<span>
+			<span><br>Охлаждение</span>
 			<script>
 				function toggleCheckbox(element) {
 					var xhr = new XMLHttpRequest();
