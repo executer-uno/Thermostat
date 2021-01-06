@@ -10,10 +10,6 @@
 
 
 	// Replace with your network credentials
-	const char* ssid 		= "YourSSID";
-	const char* password 	= "YourPASS";
-
-	// Replace with your network credentials
 	const char* own_ssid 		= "YourAPSSID";
 	const char* own_password 	= "YourAPPASS";
 

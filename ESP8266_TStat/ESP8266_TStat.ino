@@ -71,9 +71,14 @@ DNSServer dnsServer;
 /* hostname for mDNS. Should work at least on windows. Try http://esp8266.local */
 const char *myHostname = own_ssid;
 
-
 // Main sensor temperature
 float tempMain = -127.00;
+
+// Temperature statistics
+float tempMain_MAX = tempMain;
+float tempMain_MIN = tempMain;
+float tempMain_MAX_prev = tempMain;
+float tempMain_MIN_prev = tempMain;
 
 /* Don't set this parameters. They are configurated at runtime and stored on EEPROM */
 /* _prev parameters are for detection of EEPROM update is necessary */
@@ -86,11 +91,13 @@ int		PAR_heater_prev = PAR_heater;
 
 // last update
 unsigned long lastPARUpdate = millis();
+unsigned long lastSTATUpdate = millis();
 
 Ticker Sensor_Call;
 Ticker LED_Call;
 Ticker Param_Call;
 Ticker Button_Call;
+Ticker Statistics_Call;
 
 struct ButtonStruct {
 	uint capFilter;				// input signal jitter filter
@@ -115,14 +122,27 @@ bool loadParameters() {
   int		temp_PAR_index  = 0;
   int		temp_PAR_heater = 0;
 
+  float		temp_Main_MAX	= 0.0;
+  float		temp_Main_MIN	= 0.0;
+
+  int 		offset	= 0;
+
+  char ok[2 + 1][2];
+
   EEPROM.begin(512);
-  EEPROM.get(0, 													temp_PAR_limit);
-  EEPROM.get(0 + sizeof(temp_PAR_limit), 							temp_PAR_index);
-  EEPROM.get(0 + sizeof(temp_PAR_limit) + sizeof(temp_PAR_index), 	temp_PAR_heater);
-  char ok[2 + 1];
-  EEPROM.get(0 + sizeof(temp_PAR_limit) + sizeof(temp_PAR_index) + sizeof(temp_PAR_heater), ok);
+  EEPROM.get(offset,	temp_PAR_limit);	offset += sizeof(temp_PAR_limit);
+  EEPROM.get(offset,	temp_PAR_index);	offset += sizeof(temp_PAR_index);
+  EEPROM.get(offset,	temp_PAR_heater);	offset += sizeof(temp_PAR_heater);
+  EEPROM.get(offset, 	ok[0]);
+
+  offset	= 400;		// Offset for statistics
+  EEPROM.get(offset, 	temp_Main_MAX);		offset += sizeof(temp_Main_MAX);
+  EEPROM.get(offset, 	temp_Main_MIN);		offset += sizeof(temp_Main_MIN);
+
+  EEPROM.get(offset, 	ok[1]);
+
   EEPROM.end();
-  if ((String(ok) != String("OK"))||(PAR_index < 0)) {
+  if ((String(ok[0]) != String("OK"))||(String(ok[1]) != String("OK"))||(PAR_index < 0)) {
 
 	  Serial.println("EEPROM parameters reading error");
 	  return false;
@@ -132,14 +152,22 @@ bool loadParameters() {
   PAR_index = temp_PAR_index;
   PAR_heater = temp_PAR_heater;
 
-  PAR_limit_prev  = PAR_limit;		// Save values to compare later for EEPROM update
-  PAR_index_prev  = PAR_index;
-  PAR_heater_prev = PAR_heater;
+  PAR_limit_prev  	= PAR_limit;		// Save values to compare later for EEPROM update
+  PAR_index_prev  	= PAR_index;
+  PAR_heater_prev 	= PAR_heater;
+
+  tempMain_MAX 		= temp_Main_MAX;	// Statistics
+  tempMain_MIN 		= temp_Main_MIN;
+  tempMain_MAX_prev	= tempMain_MAX;
+  tempMain_MIN_prev = tempMain_MIN;
 
   Serial.println("Parameters from EEPROM:");
   Serial.println(PAR_limit);
   Serial.println(PAR_index);
   Serial.println(PAR_heater);
+  Serial.println(tempMain_MAX);
+  Serial.println(tempMain_MIN);
+
   return true;
 }
 
@@ -195,6 +223,12 @@ String processor(const String& var){
   }
   else if(var == "INDEX"){
     return String(PAR_index);
+  }
+  else if(var == "T_MAX"){
+    return String(tempMain_MAX);
+  }
+  else if(var == "T_MIN"){
+    return String(tempMain_MIN);
   }
   else if(var == "HEATER"){
 	  if(PAR_heater){
@@ -335,6 +369,21 @@ void handleUpdate(AsyncWebServerRequest *request) {
 
 }
 
+
+/** Handle the WLAN save form and redirect to WLAN config page again */
+void handleRstStat(AsyncWebServerRequest *request) {
+  Serial.println("handleRstStat called");
+
+	// Statistics reset
+	tempMain_MAX = tempMain;
+	tempMain_MIN = tempMain;
+	lastSTATUpdate = 0;			// EEPROM will be updated
+
+	SaveStatistics();
+
+  request->send(200, "text/plain", "OK");
+}
+
 // function to print a device address
 void printAddress(DeviceAddress deviceAddress) {
   for (uint8_t i = 0; i < 8; i++){
@@ -418,6 +467,7 @@ void setup(){
   server.on("/fwlink", 		 handleRoot);  		//Microsoft captive portal. Maybe not needed. Might be handled by notFound handler.
   server.on("/saveparams", 	 handleSaveParams);
   server.on("/update", 		 handleUpdate);
+  server.on("/rststat", 	 handleRstStat);	// Reset statistics
 
   server.on("/temperaturec", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", readDSTemperatureC().c_str());
@@ -489,8 +539,35 @@ void setup(){
   Sensor_Call.attach(10.3, CallSensorsHandler);
   LED_Call.attach_ms(LED_PERIOD, CallLED);
   Button_Call.attach_ms(2, CallButtons);
+  Statistics_Call.attach(60 * 5.0, SaveStatistics);
 
   digitalWrite(LED_BUILTIN, HIGH);
+}
+
+
+/** Store statistics to EEPROM */
+void SaveStatistics() {
+	// Check if statistics to be saved in EEPROM
+	if(((tempMain_MAX_prev != tempMain_MAX) || (tempMain_MIN_prev != tempMain_MIN)) && (millis() - lastSTATUpdate > (10 * 60 * 1000))){
+
+		int 	offset		= 0;
+		char 	ok[2 + 1] 	= "OK";
+
+		EEPROM.begin(512);
+		offset	= 400;							// Offset for statistics
+
+		EEPROM.put(offset, 	tempMain_MAX);		offset += sizeof(tempMain_MAX);
+		EEPROM.put(offset, 	tempMain_MIN);		offset += sizeof(tempMain_MIN);
+
+		EEPROM.put(offset, 	ok);
+
+		EEPROM.commit();
+		EEPROM.end();
+
+		tempMain_MAX_prev  = tempMain_MAX;		// Save values to compare later for EEPROM update
+		tempMain_MIN_prev  = tempMain_MIN;
+		Serial.println("Statistics saved to EEPROM");
+	}
 }
 
 
@@ -582,6 +659,16 @@ void CallSensors(){
 	else{														// Load - Cooler
 		if(tempMain > PAR_limit) 		Load_ON	= true;
 		if(tempMain < PAR_limit - 1.0)	Load_ON	= false;
+	}
+
+	// Statistics
+	if(tempMain > tempMain_MAX){
+		tempMain_MAX = tempMain;
+		lastSTATUpdate = millis();
+	}
+	if(tempMain < tempMain_MIN){
+		tempMain_MIN = tempMain;
+		lastSTATUpdate = millis();
 	}
 
 	digitalWrite(LED_BUILTIN, HIGH);

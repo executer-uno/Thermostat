@@ -56,8 +56,24 @@
 			<svg class="icon" viewBox="0 0 300 550" ><use class="icon" xlink:href="#thermometer-half" x="0" y="0" /></svg>
 		</span> 
 		<span class="ds-labels"></span> 
-		<span id="temperaturec">%TEMPERATUREC%</span>
+		<span id="temperaturec">
+			<table style="width: 40%; ">
+			<tbody>
+			<tr>
+				<td rowspan="2" style="width: 60%;">%TEMPERATUREC%</td>
+				<td style="width: 40%;">%T_MAX%</td></tr>
+			<tr>
+				<td style="width: 40%;">%T_MIN%</td>
+			</tr>
+			</tbody>
+			</table>
+		</span>
 		<sup class="units">&deg;C</sup>
+	  </p>
+	  <p>
+		<form action="/rststat" method="GET">
+			<button type="submit" >—брос</button>
+		</form>
 	  </p>
 	  <p>
 		<form action="/config" method="GET">
