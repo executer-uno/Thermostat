@@ -44,14 +44,14 @@ To get project in Sloeber IDE download ZIP and extract it manually or follow htt
 # Hardware
 Some details are available on https://oshwlab.com/executer/thyristor-ac-thermostat portal. Some pictures for overview:
 
-![Web main](Images/Main web page.jpg?raw=true "Web main")
+![Web main](Images/Main%20web%20page.jpg?raw=true "Web main")
 
-![Web config](Images/Config web page.jpg?raw=true "Web config")
+![Web config](Images/Config%20web%20page.jpg?raw=true "Web config")
 
-![Exterior 1](Images/External 1.jpg?raw=true "Exterior 1")
+![Exterior 1](Images/External%201.jpg?raw=true "Exterior 1")
 
-![Exterior 2](Images/External 2.jpg?raw=true "Exterior 2")
+![Exterior 2](Images/External%202.jpg?raw=true "Exterior 2")
 
-![Before enclosure close](Images/Before enclosure close.jpg?raw=true "Before enclosure close")
+![Before enclosure close](Images/Before%20enclosure%20close.jpg?raw=true "Before enclosure close")
 
-![Load test](Images/Load test 1.5kW.jpg?raw=true "Load test")
+![Load test](Images/Load%20test%201.5kW.jpg?raw=true "Load test")
