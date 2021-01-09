@@ -6,6 +6,8 @@ https://oshwlab.com/executer/thyristor-ac-thermostat
 
 Based on https://habr.com/ru/company/unwds/blog/390601/
 
+Usefull portal for web pages debug: http://jsfiddle.net/boilerplate/jquery
+
 # Main features:
 * Stand alone, no external WiFi/Internet required
 * Web server based configuration. No hardware indicators/buttons required
