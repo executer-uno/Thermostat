@@ -40,6 +40,22 @@
 			width: 15.0rem;  height: 3.0rem;
 			font-size: 2.0rem;
 		}
+		table {
+			margin: auto;
+		}
+		td {
+			text-align: center;
+		}
+		.max{
+			vertical-align: bottom;
+			text-align: right;
+			padding: 0.25rem;
+		}
+		.min{
+			vertical-align: top;
+			text-align: right;
+			padding: 0.25rem;
+		}  
 	  </style>
 	  <svg style="display: none;">
 	  <symbol id="thermometer-half">
@@ -52,23 +68,25 @@
 	  <h2>Термостат</h2>
 	  <h2>(%LIMIT% &deg;C)</h2>
 	  <p>
-		<span class="ds-icon">
-			<svg class="icon" viewBox="0 0 300 550" ><use class="icon" xlink:href="#thermometer-half" x="0" y="0" /></svg>
-		</span> 
-		<span class="ds-labels"></span> 
-		<span id="temperaturec">
-			<table style="width: 40%; ">
-			<tbody>
-			<tr>
-				<td rowspan="2" style="width: 60%;">%TEMPERATUREC%</td>
-				<td style="width: 40%;">%T_MAX%</td></tr>
-			<tr>
-				<td style="width: 40%;">%T_MIN%</td>
-			</tr>
-			</tbody>
-			</table>
-		</span>
-		<sup class="units">&deg;C</sup>
+		<table>
+		<tbody>
+		<tr>
+		<td rowspan="2">
+			<span class="ds-icon"><svg class="icon" viewBox="0 0 300 550" ><use class="icon" xlink:href="#thermometer-half" x="0" y="0" /></svg></span>
+		</td>
+		<td class="max" id="tempmax">%T_MAX%</td>
+		<td rowspan="2">
+			<h2><span id="temperaturec">%TEMPERATUREC%</span></h2>
+		</td>
+		<td rowspan="2">
+			<sup class="units">&deg;C</sup>
+		</td>
+		</tr>
+		<tr>
+		<td class="min" id="tempmin">%T_MIN%</td>
+		</tr>
+		</tbody>
+		</table>
 	  </p>
 	  <p>
 		<form action="/rststat" method="GET">
@@ -92,6 +110,28 @@
 		}
 	  };
 	  xhttp.open("GET", "/temperaturec", true);
+	  xhttp.send();
+	}, 10000) ;
+
+	setInterval(function ( ) {
+	  var xhttp = new XMLHttpRequest();
+	  xhttp.onreadystatechange = function() {
+		if (this.readyState == 4 && this.status == 200) {
+		  document.getElementById("tempmax").innerHTML = this.responseText;
+		}
+	  };
+	  xhttp.open("GET", "/temperaturemax", true);
+	  xhttp.send();
+	}, 10000) ;
+
+	setInterval(function ( ) {
+	  var xhttp = new XMLHttpRequest();
+	  xhttp.onreadystatechange = function() {
+		if (this.readyState == 4 && this.status == 200) {
+		  document.getElementById("tempmin").innerHTML = this.responseText;
+		}
+	  };
+	  xhttp.open("GET", "/temperaturemin", true);
 	  xhttp.send();
 	}, 10000) ;
 	

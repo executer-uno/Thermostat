@@ -75,10 +75,10 @@ const char *myHostname = own_ssid;
 float tempMain = -127.00;
 
 // Temperature statistics
-float tempMain_MAX = tempMain;
-float tempMain_MIN = tempMain;
-float tempMain_MAX_prev = tempMain;
-float tempMain_MIN_prev = tempMain;
+float tempMain_MAX = -MAXFLOAT;
+float tempMain_MIN =  MAXFLOAT;
+float tempMain_MAX_prev = tempMain_MAX;
+float tempMain_MIN_prev = tempMain_MIN;
 
 /* Don't set this parameters. They are configurated at runtime and stored on EEPROM */
 /* _prev parameters are for detection of EEPROM update is necessary */
@@ -127,7 +127,7 @@ bool loadParameters() {
 
   int 		offset	= 0;
 
-  char ok[2 + 1][2];
+  char ok[2][2 + 1];
 
   EEPROM.begin(512);
   EEPROM.get(offset,	temp_PAR_limit);	offset += sizeof(temp_PAR_limit);
@@ -142,9 +142,9 @@ bool loadParameters() {
   EEPROM.get(offset, 	ok[1]);
 
   EEPROM.end();
-  if ((String(ok[0]) != String("OK"))||(String(ok[1]) != String("OK"))||(PAR_index < 0)) {
+  if ((String(ok[0]) != String("OK"))||(temp_PAR_index < 0)) {
 
-	  Serial.println("EEPROM parameters reading error");
+	  Serial.println("0");
 	  return false;
   }
 
@@ -156,15 +156,24 @@ bool loadParameters() {
   PAR_index_prev  	= PAR_index;
   PAR_heater_prev 	= PAR_heater;
 
+  Serial.println("Parameters from EEPROM:");
+  Serial.println(PAR_limit);
+  Serial.println(PAR_index);
+  Serial.println(PAR_heater);
+
+
+  if (String(ok[1]) != String("OK")) {
+
+	  Serial.println("EEPROM statistics reading error");
+	  return false;
+  }
+
   tempMain_MAX 		= temp_Main_MAX;	// Statistics
   tempMain_MIN 		= temp_Main_MIN;
   tempMain_MAX_prev	= tempMain_MAX;
   tempMain_MIN_prev = tempMain_MIN;
 
-  Serial.println("Parameters from EEPROM:");
-  Serial.println(PAR_limit);
-  Serial.println(PAR_index);
-  Serial.println(PAR_heater);
+  Serial.println("Statistics from EEPROM:");
   Serial.println(tempMain_MAX);
   Serial.println(tempMain_MIN);
 
@@ -175,12 +184,15 @@ bool loadParameters() {
 void saveParameters() {
 	// Check if parameters to be saved in EEPROM
 	if(((PAR_limit_prev != PAR_limit) || (PAR_index_prev != PAR_index) || (PAR_heater_prev != PAR_heater)) && (millis() - lastPARUpdate > 20* 1000)){
-		EEPROM.begin(512);
-		EEPROM.put(0, PAR_limit);
-		EEPROM.put(0 + sizeof(PAR_limit), PAR_index);
-		EEPROM.put(0 + sizeof(PAR_limit) + sizeof(PAR_index), PAR_heater);
+
+		int	offset	= 0;
 		char ok[2 + 1] = "OK";
-		EEPROM.put(0 + sizeof(PAR_limit) + sizeof(PAR_index) + sizeof(PAR_heater), ok);
+
+		EEPROM.begin(512);
+		EEPROM.put(offset, PAR_limit);		offset += sizeof(PAR_limit);
+		EEPROM.put(offset, PAR_index);		offset += sizeof(PAR_index);
+		EEPROM.put(offset, PAR_heater);		offset += sizeof(PAR_heater);
+		EEPROM.put(offset, ok);				offset += sizeof(ok);
 		EEPROM.commit();
 		EEPROM.end();
 
@@ -381,7 +393,15 @@ void handleRstStat(AsyncWebServerRequest *request) {
 
 	SaveStatistics();
 
-  request->send(200, "text/plain", "OK");
+	AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "");
+
+	response->addHeader("Location", "/");
+	response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+	response->addHeader("Pragma", "no-cache");
+	response->addHeader("Expires", "-1");
+
+	request->send(response);
+	request->client()->stop();	// Stop is needed because we sent no content length
 }
 
 // function to print a device address
@@ -471,6 +491,12 @@ void setup(){
 
   server.on("/temperaturec", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", readDSTemperatureC().c_str());
+  });
+  server.on("/temperaturemax", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", String(tempMain_MAX).c_str());
+  });
+  server.on("/temperaturemin", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", String(tempMain_MIN).c_str());
   });
 
 
@@ -662,11 +688,11 @@ void CallSensors(){
 	}
 
 	// Statistics
-	if(tempMain > tempMain_MAX){
+	if(tempMain > tempMain_MAX && tempMain !=-127.0){
 		tempMain_MAX = tempMain;
 		lastSTATUpdate = millis();
 	}
-	if(tempMain < tempMain_MIN){
+	if(tempMain < tempMain_MIN && tempMain !=-127.0){
 		tempMain_MIN = tempMain;
 		lastSTATUpdate = millis();
 	}
