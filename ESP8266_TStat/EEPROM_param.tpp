@@ -8,7 +8,6 @@
 #define VER	1100		// change if EEPROM storage layout changed
 
 #include <Arduino.h>
-#include "EEPROM_param.h"
 #include "EEPROM.h"
 
 
@@ -61,6 +60,7 @@ void EEPROM_param<T>::Set(T setVal){
 template <typename T>
 void EEPROM_param<T>::Store(bool force){
 	bool storeEn = force;
+	T	TValue	 = this->value;
 
 	if((millis() - this->timestamp > this->cycle_ms) && this->changed){
 		storeEn = true;
@@ -71,10 +71,13 @@ void EEPROM_param<T>::Store(bool force){
 
 		EEPROM.begin(512);
 		EEPROM.put(this->offset,	check);
-		EEPROM.put(this->offset + sizeof(check),	this->value);
+		EEPROM.put(this->offset + sizeof(check),	TValue);
 		EEPROM.commit();
 		EEPROM.end();
 
+		this->timestamp = millis();
+		this->changed	= false;
+		
 		Serial.print("EEPROM updated. Offset=");
 		Serial.println(offset);
 	}

@@ -23,10 +23,12 @@
 
 		T		Get();				// Get value
 		void	Set(T setVal);		// Set value
-		void	Store(bool force);	// Store parameter in EEPROM
+		void	Store(bool force = false);	// Store parameter in EEPROM
 
 		EEPROM_param(T default_value, int &offset, unsigned long cycle_ms = 5*60*1000);	// constructor
 	};
 
+
+	#include "EEPROM_param.tpp"		// templates file // See https://stackoverflow.com/questions/495021/why-can-templates-only-be-implemented-in-the-header-file
 
 #endif /* EEPROM_PARAM_H_ */

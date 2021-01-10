@@ -77,23 +77,34 @@ const char *myHostname = own_ssid;
 float tempMain = -127.00;
 
 // Temperature statistics
+/*
 float tempMain_MAX = -MAXFLOAT;
 float tempMain_MIN =  MAXFLOAT;
 float tempMain_MAX_prev = tempMain_MAX;
 float tempMain_MIN_prev = tempMain_MIN;
+*/
 
 /* Don't set this parameters. They are configurated at runtime and stored on EEPROM */
 /* _prev parameters are for detection of EEPROM update is necessary */
+
+/*
 float 	PAR_limit = 10;
 float 	PAR_limit_prev = PAR_limit;
 int		PAR_index = 0;
 int		PAR_index_prev = PAR_index;
-int		PAR_heater = 0;							// Load type. Heater = 1 (load on if temperature less than set point). Cooler = 0 (load on if temperature higher than set point)
+int		PAR_heater = 0;									// Load type. Heater = 1 (load on if temperature less than set point). Cooler = 2 (load on if temperature higher than set point). 0 = not defined, load will be switched off
 int		PAR_heater_prev = PAR_heater;
+*/
 
-// last update
-unsigned long lastPARUpdate = millis();
-unsigned long lastSTATUpdate = millis();
+
+int		offsetPAR=0;												// required for EEPROM_param constructors
+EEPROM_param <float> PARlimit(10.0	,offsetPAR, 20*1000);			// Temperature set point
+EEPROM_param <int> PARheater(0	,offsetPAR, 20*1000);			// Load type. Heater = +1 (load on if temperature less than set point). Cooler = -1 (load on if temperature higher than set point). 0 = (initial) not defined, load will be switched off
+
+int		offsetSTAT=400;												// required for EEPROM_param constructors for statistics
+EEPROM_param <float> T_max(-300.0	,offsetSTAT, 10*60*1000);	// Temperature maximum
+EEPROM_param <float> T_min(+300.0	,offsetSTAT, 10*60*1000);	// Temperature minimum
+
 
 Ticker Sensor_Call;
 Ticker LED_Call;
@@ -117,92 +128,13 @@ bool Sensor_Call_Flag = false;	// Sensors can not be called inside ticker interr
 
 uint16_t LED_Counter=0;
 
-/** Load parameters from EEPROM */
-bool loadParameters() {
-
-  float 	temp_PAR_limit  = 0;
-  int		temp_PAR_index  = 0;
-  int		temp_PAR_heater = 0;
-
-  float		temp_Main_MAX	= 0.0;
-  float		temp_Main_MIN	= 0.0;
-
-  int 		offset	= 0;
-
-  char ok[2][2 + 1];
-
-  EEPROM.begin(512);
-  EEPROM.get(offset,	temp_PAR_limit);	offset += sizeof(temp_PAR_limit);
-  EEPROM.get(offset,	temp_PAR_index);	offset += sizeof(temp_PAR_index);
-  EEPROM.get(offset,	temp_PAR_heater);	offset += sizeof(temp_PAR_heater);
-  EEPROM.get(offset, 	ok[0]);
-
-  offset	= 400;		// Offset for statistics
-  EEPROM.get(offset, 	temp_Main_MAX);		offset += sizeof(temp_Main_MAX);
-  EEPROM.get(offset, 	temp_Main_MIN);		offset += sizeof(temp_Main_MIN);
-
-  EEPROM.get(offset, 	ok[1]);
-
-  EEPROM.end();
-  if ((String(ok[0]) != String("OK"))||(temp_PAR_index < 0)) {
-
-	  Serial.println("EEPROM parameters reading error");
-	  return false;
-  }
-
-  PAR_limit = temp_PAR_limit;
-  PAR_index = temp_PAR_index;
-  PAR_heater = temp_PAR_heater;
-
-  PAR_limit_prev  	= PAR_limit;		// Save values to compare later for EEPROM update
-  PAR_index_prev  	= PAR_index;
-  PAR_heater_prev 	= PAR_heater;
-
-  Serial.println("Parameters from EEPROM:");
-  Serial.println(PAR_limit);
-  Serial.println(PAR_index);
-  Serial.println(PAR_heater);
-
-
-  if (String(ok[1]) != String("OK")) {
-
-	  Serial.println("EEPROM statistics reading error");
-	  return false;
-  }
-
-  tempMain_MAX 		= temp_Main_MAX;	// Statistics
-  tempMain_MIN 		= temp_Main_MIN;
-  tempMain_MAX_prev	= tempMain_MAX;
-  tempMain_MIN_prev = tempMain_MIN;
-
-  Serial.println("Statistics from EEPROM:");
-  Serial.println(tempMain_MAX);
-  Serial.println(tempMain_MIN);
-
-  return true;
-}
 
 /** Store parameters to EEPROM */
 void saveParameters() {
-	// Check if parameters to be saved in EEPROM
-	if(((PAR_limit_prev != PAR_limit) || (PAR_index_prev != PAR_index) || (PAR_heater_prev != PAR_heater)) && (millis() - lastPARUpdate > 20* 1000)){
 
-		int	offset	= 0;
-		char ok[2 + 1] = "OK";
+	PARlimit.Store();
+	PARheater.Store();
 
-		EEPROM.begin(512);
-		EEPROM.put(offset, PAR_limit);		offset += sizeof(PAR_limit);
-		EEPROM.put(offset, PAR_index);		offset += sizeof(PAR_index);
-		EEPROM.put(offset, PAR_heater);		offset += sizeof(PAR_heater);
-		EEPROM.put(offset, ok);				offset += sizeof(ok);
-		EEPROM.commit();
-		EEPROM.end();
-
-		PAR_limit_prev  = PAR_limit;		// Save values to compare later for EEPROM update
-		PAR_index_prev  = PAR_index;
-		PAR_heater_prev = PAR_heater;
-		Serial.println("Parameters saved to EEPROM");
-	}
 }
 
 
@@ -233,25 +165,23 @@ String processor(const String& var){
     return readDSTemperatureC();
   }
   else if(var == "LIMIT"){
-    return String((int)PAR_limit);
-  }
-  else if(var == "INDEX"){
-    return String(PAR_index);
+    return String((int)PARlimit.Get());
   }
   else if(var == "T_MAX"){
-    return String(tempMain_MAX);
+    return String(T_max.Get());
   }
   else if(var == "T_MIN"){
-    return String(tempMain_MIN);
+    return String(T_min.Get());
   }
   else if(var == "HEATER"){
-	  if(PAR_heater){
+	  if(PARheater.Get()==1){
 	    return "checked";
 	  }
 	  else {
 	    return "";
 	  }
   }
+
   return String();
 }
 
@@ -339,7 +269,7 @@ boolean captivePortal(AsyncWebServerRequest *request) {
 void handleSaveParams(AsyncWebServerRequest *request) {
   Serial.println("handleSaveParams called");
 
-  PAR_limit = request->arg("limit").toFloat();
+  PARlimit.Set((float)(request->arg("limit").toFloat()));
 
   AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "");
 
@@ -350,8 +280,6 @@ void handleSaveParams(AsyncWebServerRequest *request) {
 
   request->send(response);
   request->client()->stop();	// Stop is needed because we sent no content length
-
-  lastPARUpdate	 = millis();	// Parameters was updated from web server
 }
 
 /** Handle the WLAN save form and redirect to WLAN config page again */
@@ -367,8 +295,12 @@ void handleUpdate(AsyncWebServerRequest *request) {
     inputMessage2 = request->getParam("state")->value();
 
     if(inputMessage1 == "heater"){
-    	PAR_heater = inputMessage2.toInt();
-    	lastPARUpdate	 = millis();	// Parameters was updated from web server
+    	if(inputMessage2.toInt()==1){
+    		PARheater.Set((int)+1);
+    	}
+    	else if(inputMessage2.toInt()==0){
+    		PARheater.Set((int)-1);
+    	}
     }
   }
   else {
@@ -389,11 +321,11 @@ void handleRstStat(AsyncWebServerRequest *request) {
   Serial.println("handleRstStat called");
 
 	// Statistics reset
-	tempMain_MAX = tempMain;
-	tempMain_MIN = tempMain;
-	lastSTATUpdate = 0;			// EEPROM will be updated
+  	T_max.Set(tempMain);
+  	T_max.Store(true);
 
-	SaveStatistics();
+  	T_min.Set(tempMain);
+  	T_min.Store(true);
 
 	AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "");
 
@@ -495,12 +427,11 @@ void setup(){
     request->send_P(200, "text/plain", readDSTemperatureC().c_str());
   });
   server.on("/temperaturemax", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/plain", String(tempMain_MAX).c_str());
+    request->send_P(200, "text/plain", String(T_max.Get()).c_str());
   });
   server.on("/temperaturemin", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/plain", String(tempMain_MIN).c_str());
+    request->send_P(200, "text/plain", String(T_min.Get()).c_str());
   });
-
 
   server.on("/reboot", handleReboot);
   server.onNotFound(handleNotFound);
@@ -508,9 +439,6 @@ void setup(){
   // Start server
   server.begin();
   Serial.println("HTTP server started");
-
-
-  loadParameters(); // Load parameters from EEPROM
 
 
   // OTA firmware update *************************************
@@ -575,27 +503,9 @@ void setup(){
 
 /** Store statistics to EEPROM */
 void SaveStatistics() {
-	// Check if statistics to be saved in EEPROM
-	if(((tempMain_MAX_prev != tempMain_MAX) || (tempMain_MIN_prev != tempMain_MIN)) && (millis() - lastSTATUpdate > (10 * 60 * 1000))){
 
-		int 	offset		= 0;
-		char 	ok[2 + 1] 	= "OK";
-
-		EEPROM.begin(512);
-		offset	= 400;							// Offset for statistics
-
-		EEPROM.put(offset, 	tempMain_MAX);		offset += sizeof(tempMain_MAX);
-		EEPROM.put(offset, 	tempMain_MIN);		offset += sizeof(tempMain_MIN);
-
-		EEPROM.put(offset, 	ok);
-
-		EEPROM.commit();
-		EEPROM.end();
-
-		tempMain_MAX_prev  = tempMain_MAX;		// Save values to compare later for EEPROM update
-		tempMain_MIN_prev  = tempMain_MIN;
-		Serial.println("Statistics saved to EEPROM");
-	}
+	T_max.Store();
+	T_min.Store();
 }
 
 
@@ -641,8 +551,8 @@ void CallLED(){
 	if(LED_Counter < 5000/LED_PERIOD){
 
 		if(Load_ON){
-			if(PAR_heater) 	digitalWrite(LED_R, LOW);		// Heating
-			else     		digitalWrite(LED_B, LOW);		// Cooling
+			if(PARheater.Get()== +1) 	digitalWrite(LED_R, LOW);		// Heating
+			if(PARheater.Get()== -1) 	digitalWrite(LED_B, LOW);		// Cooling
 		}
 		LED_Counter++;
 	}
@@ -680,24 +590,21 @@ void CallSensors(){
 	Serial.println("");
 
 	// Temperature control
-	if(PAR_heater){												// Load - Heater
-		if(tempMain < PAR_limit) 		Load_ON	= true;
-		if(tempMain > PAR_limit + 1.0)	Load_ON	= false;
+	if(PARheater.Get()==	+1){												// Load - Heater
+		if(tempMain < PARlimit.Get()) 		Load_ON	= true;
+		if(tempMain > PARlimit.Get() + 1.0)	Load_ON	= false;
 	}
-	else{														// Load - Cooler
-		if(tempMain > PAR_limit) 		Load_ON	= true;
-		if(tempMain < PAR_limit - 1.0)	Load_ON	= false;
+	else if(PARheater.Get()==	-1){											// Load - Cooler
+		if(tempMain > PARlimit.Get()) 		Load_ON	= true;
+		if(tempMain < PARlimit.Get() - 1.0)	Load_ON	= false;
+	}
+	else{
+		Load_ON	= false;
 	}
 
 	// Statistics
-	if(tempMain > tempMain_MAX && tempMain !=-127.0){
-		tempMain_MAX = tempMain;
-		lastSTATUpdate = millis();
-	}
-	if(tempMain < tempMain_MIN && tempMain !=-127.0){
-		tempMain_MIN = tempMain;
-		lastSTATUpdate = millis();
-	}
+	if(tempMain > T_max.Get() && tempMain !=-127.0)		T_max.Set(tempMain);
+	if(tempMain < T_min.Get() && tempMain !=-127.0)		T_min.Set(tempMain);
 
 	digitalWrite(LED_BUILTIN, HIGH);
 }
