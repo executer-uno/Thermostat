@@ -28,6 +28,8 @@
 #include "Secrets.h"
 #include "HTML.h"
 
+#include "EEPROM_param.h"
+
 // Pinouts configuration
 	// Data wire is connected to GPIO 4
 	#define ONE_WIRE_BUS	4		// D2
@@ -144,7 +146,7 @@ bool loadParameters() {
   EEPROM.end();
   if ((String(ok[0]) != String("OK"))||(temp_PAR_index < 0)) {
 
-	  Serial.println("0");
+	  Serial.println("EEPROM parameters reading error");
 	  return false;
   }
 
