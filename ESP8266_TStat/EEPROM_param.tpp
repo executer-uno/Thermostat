@@ -6,6 +6,7 @@
  */
 
 #define VER	1100		// change if EEPROM storage layout changed
+#define EEPROM_SIZE	512
 
 #include <Arduino.h>
 #include "EEPROM.h"
@@ -22,7 +23,7 @@ EEPROM_param<T>::EEPROM_param(T default_value, int &offset, unsigned long cycle_
 	this->value		= default_value;
 	this->cycle_ms	= cycle_ms;
 
-	EEPROM.begin(512);
+	EEPROM.begin(EEPROM_SIZE);
 	EEPROM.get(offset,	check);
 	EEPROM.get(offset + sizeof(check),	TValue);
 	EEPROM.end();
@@ -69,7 +70,7 @@ void EEPROM_param<T>::Store(bool force){
 	if(storeEn){
 		int check = VER;
 
-		EEPROM.begin(512);
+		EEPROM.begin(EEPROM_SIZE);
 		EEPROM.put(this->offset,	check);
 		EEPROM.put(this->offset + sizeof(check),	TValue);
 		EEPROM.commit();

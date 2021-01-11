@@ -25,8 +25,8 @@
 
 #include <Ticker.h>  //Ticker Library
 
-#include "Secrets.h"
 #include "HTML.h"
+#include "EEPROM.h"
 
 #include "EEPROM_param.h"
 
@@ -46,6 +46,12 @@
 	#define LOAD			15		// D8
 
 	#define LED_PERIOD		50		// in ms
+
+// EEPROM layout
+#define	EEPROM_PARAM	0
+#define	EEPROM_SSID		300
+#define	EEPROM_STAT		400
+#define EEPROM_SIZE		512			// !! also defined in EEPROM_param.tpp
 
 
 // Setup a oneWire instance to communicate with any OneWire devices
@@ -69,9 +75,6 @@ IPAddress netMsk(255, 255, 255, 0);
 
 const byte DNS_PORT = 53;
 DNSServer dnsServer;
-
-/* hostname for mDNS. Should work at least on windows. Try http://esp8266.local */
-const char *myHostname = own_ssid;
 
 // Main sensor temperature
 float tempMain = -127.00;
@@ -97,11 +100,11 @@ int		PAR_heater_prev = PAR_heater;
 */
 
 
-int		offsetPAR=0;												// required for EEPROM_param constructors
-EEPROM_param <float> PARlimit(10.0	,offsetPAR, 20*1000);			// Temperature set point
-EEPROM_param <int> PARheater(0	,offsetPAR, 20*1000);			// Load type. Heater = +1 (load on if temperature less than set point). Cooler = -1 (load on if temperature higher than set point). 0 = (initial) not defined, load will be switched off
+int		offsetPAR=EEPROM_PARAM;									// required for EEPROM_param constructors
+EEPROM_param <float> PARlimit(10.0	,offsetPAR, 20*1000);		// Temperature set point
+EEPROM_param <int> PARheater(0		,offsetPAR, 20*1000);		// Load type. Heater = +1 (load on if temperature less than set point). Cooler = -1 (load on if temperature higher than set point). 0 = (initial) not defined, load will be switched off
 
-int		offsetSTAT=400;												// required for EEPROM_param constructors for statistics
+int		offsetSTAT=EEPROM_STAT;									// required for EEPROM_param constructors for statistics
 EEPROM_param <float> T_max(-300.0	,offsetSTAT, 10*60*1000);	// Temperature maximum
 EEPROM_param <float> T_min(+300.0	,offsetSTAT, 10*60*1000);	// Temperature minimum
 
@@ -128,6 +131,8 @@ bool Sensor_Call_Flag = false;	// Sensors can not be called inside ticker interr
 
 uint16_t LED_Counter=0;
 
+String APSSID = "";				// parameters are dynamic and stored in EEPROM
+String APPASS = "";				// adjusted from web page
 
 /** Store parameters to EEPROM */
 void saveParameters() {
@@ -172,6 +177,9 @@ String processor(const String& var){
   }
   else if(var == "T_MIN"){
     return String(T_min.Get());
+  }
+  else if(var == "APSSID"){
+    return APSSID;
   }
   else if(var == "HEATER"){
 	  if(PARheater.Get()==1){
@@ -251,7 +259,7 @@ void handleNotFound(AsyncWebServerRequest *request) {
 
 /** Redirect to captive portal if we got a request for another domain. Return true in that case so the page handler do not try to handle the request again. */
 boolean captivePortal(AsyncWebServerRequest *request) {
-  if (!isIp(request->host()) && request->host() != (String(myHostname) + ".local")) {
+  if (!isIp(request->host()) && request->host() != (APSSID + ".local")) {
     Serial.println("Request redirected to captive portal");
 
     AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "");
@@ -264,6 +272,70 @@ boolean captivePortal(AsyncWebServerRequest *request) {
   return false;
 }
 
+/** Handle the WLAN save form and redirect to WLAN config page again */
+void handleSaveSSID(AsyncWebServerRequest *request) {
+  Serial.println("handleSaveSSID called");
+
+  Serial.print("SSID: ");
+  Serial.println(request->arg("APSSID"));
+  Serial.print("PASS: ");
+  Serial.println(request->arg("APPASS1"));
+  Serial.print("PASS: ");
+  Serial.println(request->arg("APPASS2"));
+
+  bool 		ErrNo[4];
+
+  ErrNo[3]	=	(request->arg("APSSID").length()	< 4 );
+  ErrNo[2]	=	(request->arg("APPASS1").length()	< 8 );
+  ErrNo[1]	=	request->arg("APPASS1").compareTo(request->arg("APPASS2")) != 0;
+
+  if(!(ErrNo[1] || ErrNo[2] || ErrNo[3])){
+
+	  APSSID = "SSID"+request->arg("APSSID");
+	  APPASS = "PASS"+request->arg("APPASS1");
+
+	  int offset = EEPROM_SSID;				// AP SSID and PASS EEPROM offset
+	  EEPROM.begin(EEPROM_SIZE);
+	  {
+		  char	 TEMP[32+4+1]="";
+
+		  // Save SSID
+		  APSSID.toCharArray(TEMP, sizeof(TEMP));
+		  EEPROM.put(offset,TEMP);	offset += sizeof(TEMP);
+		  // Save PASSWORD
+		  APPASS.toCharArray(TEMP, sizeof(TEMP));
+		  EEPROM.put(offset,TEMP);	offset += sizeof(TEMP);
+
+	  }
+	  if (EEPROM.commit()) {
+		  Serial.println("EEPROM successfully committed");
+
+		  EEPROM.end();
+
+		  delay(1000);
+		  Serial.println("SSID updated in EEPROM. Reboots...");
+		  ESP.restart();
+	  }
+	  else {
+		  Serial.println("ERROR! EEPROM commit failed");
+	  }
+
+	  EEPROM.end();
+  }
+  else{
+
+	  String ErrorResponse = "<!DOCTYPE HTML><html><body><h2>Ошибка</h2><h3>";
+
+	  if(ErrNo[1])	ErrorResponse += "Поля паролей не совпадают<br>";
+	  if(ErrNo[2])	ErrorResponse += "Пароль меньше 8 символов<br>";
+	  if(ErrNo[3])	ErrorResponse += "Имя сети меньше 4 символов<br>";
+
+	  ErrorResponse += "</h3></body></html>";
+
+	  request->send(200, "text/html", ErrorResponse);
+
+  }
+}
 
 /** Handle the WLAN save form and redirect to WLAN config page again */
 void handleSaveParams(AsyncWebServerRequest *request) {
@@ -402,9 +474,49 @@ void setup(){
   }
   sensors.requestTemperatures(); // Send the command to get temperatures
 
+
+  // access point name
+  char	 TEMP[32+4+1]="";
+  int offset = EEPROM_SSID;				// AP SSID and PASS EEPROM offset
+
+  EEPROM.begin(EEPROM_SIZE);
+  {
+	  // Restore SSID
+	  EEPROM.get(offset,	TEMP);	offset += sizeof(TEMP);
+	  TEMP[32+4] = 0;				// To be sure null-terminated
+	  APSSID = String(TEMP);
+
+	  if(APSSID.startsWith("SSID")){
+		APSSID = APSSID.substring(4);
+	  }
+	  else{
+		APSSID = WiFi.macAddress();
+		APSSID.replace(":", "");
+		APSSID = "SOCKET" + APSSID;
+	  }
+
+	  // Restore PASSWORD
+	  EEPROM.get(offset,	TEMP);	offset += sizeof(TEMP);
+	  TEMP[32+4] = 0;				// To be sure null-terminated
+	  APPASS = String(TEMP);
+
+	  if(APPASS.startsWith("PASS")){
+		APPASS = APPASS.substring(4);
+	  }
+	  else{
+		APPASS = "";
+	  }
+  }
+  EEPROM.end();
+
+  Serial.print("AP SSID: ");
+  Serial.println(APSSID);
+  Serial.print("AP PASS: ");
+  Serial.println(APPASS);
+
   // Rise own wifi point
   WiFi.softAPConfig(apIP, apIP, netMsk);
-  WiFi.softAP(own_ssid, own_password);
+  WiFi.softAP(APSSID.c_str(), APPASS.c_str());
   delay(500); // Without delay I've seen the IP address blank
   IPAddress IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
@@ -420,6 +532,7 @@ void setup(){
   server.on("/generate_204", handleRoot);  	//Android captive portal. Maybe not needed. Might be handled by notFound handler.
   server.on("/fwlink", 		 handleRoot);  		//Microsoft captive portal. Maybe not needed. Might be handled by notFound handler.
   server.on("/saveparams", 	 handleSaveParams);
+  server.on("/saveSSID", 	 handleSaveSSID);
   server.on("/update", 		 handleUpdate);
   server.on("/rststat", 	 handleRstStat);	// Reset statistics
 
@@ -449,7 +562,7 @@ void setup(){
   //ArduinoOTA.setPort(3232); 	// for ArduinoIDE
 
   // Hostname defaults to esp8266-[ChipID]
-  ArduinoOTA.setHostname(own_ssid);
+  ArduinoOTA.setHostname(APSSID.c_str());
 
   // No authentication by default
   // ArduinoOTA.setPassword("admin");

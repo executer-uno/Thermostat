@@ -8,8 +8,6 @@
 #ifndef HTML_H_
 #define HTML_H_
 
-
-
 	const char index_html[] PROGMEM = R"rawliteral(
 	<!DOCTYPE HTML><html>
 	<head>
@@ -144,119 +142,154 @@
 
 
 	const char settings_html[] PROGMEM = R"rawliteral(
-	<!DOCTYPE HTML><html>
-	<head>
-		<title>Термостат</title>
-		<meta name="viewport" content="width=device-width, initial-scale=1">
-		<link rel="icon" href="data:,">
-		<style>
-			html {
-				font-family: Arial;
-				display: inline-block;
-				margin: 0px auto;
-				text-align: center;
-			}
-			h2 { font-size: 3.0rem; }
-			p { font-size: 2.0rem; }
-			.units { font-size: 2.0rem; }
-			.ds-labels{
-				font-size: 1.5rem;
-				vertical-align:middle;
-				padding-bottom: 15px;
-			}
-			button {
-				font-size: 2.0rem;
-			}
-			button[type=submit] {
-				width: 15.0rem;  height: 3.0rem;
-				font-size: 2.0rem;
-			}
-	
-	
-			input[type="number"] {
-			  -webkit-appearance: textfield;
-			  -moz-appearance: textfield;
-			  appearance: textfield;
-			}
-	
-			input[type=number]::-webkit-inner-spin-button,
-			input[type=number]::-webkit-outer-spin-button {
-			  -webkit-appearance: none;
-			}
-	
-			.number-input {
-			  border: 2px solid #ddd;
-			  display: inline-flex;
-			}
-	
-			.number-input,
-			.number-input * {
-			  box-sizing: border-box;
-			}
-	
-			.number-input button {
-			  outline:none;
-			  -webkit-appearance: none;
-			  background-color: transparent;
-			  border: none;
-			  align-items: center;
-			  justify-content: center;
-			  width: 3rem;
-			  height: 3rem;
-			  cursor: pointer;
-			  margin: 0;
-			  position: relative;
-			}
-	
-			.number-input input[type=number] {
-			  font-family: sans-serif;
-			  max-width: 5rem;
-			  padding: .5rem;
-			  border: solid #ddd;
-			  border-width: 0 2px;
-			  font-size: 2rem;
-			  height: 3rem;
-			  font-weight: bold;
-			  text-align: center;
-			}
+<!DOCTYPE HTML><html>
+<head>
+	<title>Термостат</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="icon" href="data:,">
+	<style>
+	html {
+		font-family: Arial;
+		display: inline-block;
+		margin: 0px auto;
+		text-align: center;
+	}
+	h2 { font-size: 3.0rem; }
+	p,
+  label { font-size: 2.0rem; }
+	.units { font-size: 2.0rem; }
+	.ds-labels{
+		font-size: 1.5rem;
+		vertical-align:middle;
+		padding-bottom: 15px;
+	}
+	button {
+		font-size: 2.0rem;
+	}
+	button[type=submit] {
+		width: 15.0rem;  height: 3.0rem;
+		font-size: 2.0rem;
+	}
 
-			body {max-width: 600px; margin:0px auto; padding-bottom: 25px;}
-			.switch {position: relative; display: inline-block; width: 68px; height: 120px} 
-			.switch input {display: none}
-			.slider {position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #0000b3; border-radius: 6px}
-			.slider:before {position: absolute; content: ""; height: 52px; width: 52px; left: 8px; bottom: 8px; background-color: #fff; -webkit-transition: .4s; transition: .4s; border-radius: 3px}
-			input:checked+.slider {background-color: #b30000}
-			input:checked+.slider:before {-webkit-transform: translateY(-52px); -ms-transform: translateY(-52px); transform: translateY(-52px)}
-	
-		</style>
-	</head>
-	<body>
-		<form method='POST' action='saveparams'><h2>Настройки</h2>
-			<div class="number-input">
-				<button onclick="this.parentNode.querySelector('input[name=limit]').stepDown()" >-</button>
-				<input class="quantity" type="number" id="limit" name="limit" min="-55" max="125" value="%LIMIT%">
-				<button onclick="this.parentNode.querySelector('input[name=limit]').stepUp()">+</button>
-			</div>
-			<sup class="units">&deg;C</sup>
+
+	input[type="number"] {
+	  -webkit-appearance: textfield;
+	  -moz-appearance: textfield;
+	  appearance: textfield;
+	}
+
+	input[type=number]::-webkit-inner-spin-button,
+	input[type=number]::-webkit-outer-spin-button {
+	  -webkit-appearance: none;
+	}
+
+	.number-input {
+	  border: 2px solid #ddd;
+	  display: inline-flex;
+	}
+
+	.number-input,
+	.number-input * {
+	  box-sizing: border-box;
+	}
+
+	.number-input button {
+	  outline:none;
+	  -webkit-appearance: none;
+	  background-color: transparent;
+	  border: none;
+	  align-items: center;
+	  justify-content: center;
+	  width: 3rem;
+	  height: 3rem;
+	  cursor: pointer;
+	  margin: 0;
+	  position: relative;
+	}
+
+	.number-input input{
+	  font-family: sans-serif;
+	  max-width: 5rem;
+	  padding: .5rem;
+	  border: solid #ddd;
+	  border-width: 0 2px;
+	  font-size: 2rem;
+	  height: 3rem;
+	  font-weight: bold;
+	  text-align: center;
+	}
+
+  .container {
+	  width: 200px;
+	  clear: both;
+    margin: 0 auto;
+    font-size: 1rem;
+    font-family: sans-serif;
+    text-align: center;
+	}
+ 
+	.container input {
+	  clear: both;
+	  padding: .5rem;
+	  border: solid #ddd;
+	  border-width: 2px;
+	  font-weight: bold;
+      text-align: center;
+	}
+  
+  .container button[type=submit] { 
+		width: 15.0rem;
+    height: 3.0rem;
+		font-size: 2.0rem;
+	}
+
+	body {max-width: 600px; margin:0px auto; padding-bottom: 25px;}
+	.switch {position: relative; display: inline-block; width: 68px; height: 120px} 
+	.switch input {display: none}
+	.slider {position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #0000b3; border-radius: 6px}
+	.slider:before {position: absolute; content: ""; height: 52px; width: 52px; left: 8px; bottom: 8px; background-color: #fff; -webkit-transition: .4s; transition: .4s; border-radius: 3px}
+	input:checked+.slider {background-color: #b30000}
+	input:checked+.slider:before {-webkit-transform: translateY(-52px); -ms-transform: translateY(-52px); transform: translateY(-52px)
+	</style>
+</head>
+<body>
+	<form method='POST' action='saveparams'><h2>Настройки</h2>
+		<div class="number-input">
+			<button onclick="this.parentNode.querySelector('input[name=limit]').stepDown()" >-</button>
+			<input class="quantity" type="number" id="limit" name="limit" min="-55" max="125" value="%LIMIT%">
+			<button onclick="this.parentNode.querySelector('input[name=limit]').stepUp()">+</button>
+		</div>
+		<sup class="units">&deg;C</sup>
+	</form>
+	<p>
+		<span>нагрев<br></span>
+		<label class="switch"><input type="checkbox" onchange="toggleCheckbox(this)" id="heater" %HEATER%><span class="slider"></span></label>
+		<span><br>охлаждение</span>
+		<script>
+			function toggleCheckbox(element) {
+				var xhr = new XMLHttpRequest();
+				if(element.checked){ xhr.open("GET", "/update?output="+element.id+"&state=1", true); }
+				else { xhr.open("GET", "/update?output="+element.id+"&state=0", true); }
+				xhr.send();
+			}
+		</script>
+	</p>
+	<form action="/" method="GET">
+		<button type="submit">Вернуться</button>
+	</form>
+		<form method='POST' action='saveSSID'><h2>Сеть</h2>
+	  <div class="container">
+      <label >имя</label>
+      <input type="text" 	 id="APSSID"  name="APSSID"  value="%APSSID%" pattern=".{4,32}" required title="от 4 до 32 знаков"><br>
+			<label>пароль</label>
+      <input type="password" id="APPASS1" name="APPASS1" value=""		  pattern=".{8,12}" required title="от 8 до 12 знаков"><br>
+			<label>пароль</label>
+      <input type="password" id="APPASS2" name="APPASS2" value=""		  pattern=".{8,12}" required title="от 8 до 12 знаков"><br><br>
+    </div>
+    <button type="submit">Сохранить</button>  
 		</form>
-		<p>
-			<span>Нагрев<br></span>
-			<label class="switch"><input type="checkbox" onchange="toggleCheckbox(this)" id="heater" %HEATER%><span class="slider"></span></label>
-			<span><br>Охлаждение</span>
-			<script>
-				function toggleCheckbox(element) {
-					var xhr = new XMLHttpRequest();
-					if(element.checked){ xhr.open("GET", "/update?output="+element.id+"&state=1", true); }
-					else { xhr.open("GET", "/update?output="+element.id+"&state=0", true); }
-					xhr.send();
-				}
-			</script>
-		</p>
-		<form action="/" method="GET">
-			<button type="submit">Вернуться</button>
-		</form>
-	</body>
-	</html>
+</body>
+</html>
 )rawliteral";
 
 
